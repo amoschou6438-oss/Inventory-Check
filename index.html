@@ -1437,6 +1437,104 @@ searchBox.addEventListener('input', (e) => {
   renderTable();
 });
 
+// ⑥ 備份控制台整合：?autobackup=1 自動下載 JSON 備份檔；?autorestore=1 跳出選檔畫面還原
+const BACKUP_FILE_TAG = 'inventory-count-backup';
+function fmtStamp(d) {
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes());
+}
+function buildBackupFile() {
+  return {
+    app: BACKUP_FILE_TAG,
+    version: 1,
+    time: new Date().toISOString(),
+    data: JSON.parse(JSON.stringify(DATA))
+  };
+}
+function downloadBackupFile() {
+  const payload = buildBackupFile();
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '庫存盤點備份_' + fmtStamp(new Date(payload.time)) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  try { localStorage.setItem(BACKUP_KEY, JSON.stringify({ time: payload.time, data: payload.data })); } catch (e) {}
+  let count = 0;
+  Object.keys(payload.data).forEach(k => { count += payload.data[k].length; });
+  return count;
+}
+function applyBackupFile(payload) {
+  if (!payload || typeof payload !== 'object' || !payload.data || typeof payload.data !== 'object') {
+    throw new Error('不是有效的盤點庫存備份檔');
+  }
+  const keys = Object.keys(payload.data).filter(k => Array.isArray(payload.data[k]));
+  if (keys.length === 0) throw new Error('備份檔內沒有任何品項資料');
+  let n = 0;
+  keys.forEach(k => { DATA[k] = payload.data[k]; n += DATA[k].length; });
+  currentSubGroup = null;
+  if (countScreen.style.display !== 'none') {
+    renderTabs();
+    renderSubTabs();
+    renderTable();
+  }
+  return n;
+}
+
+(function () {
+  const params = new URLSearchParams(location.search);
+
+  if (params.get('autobackup') === '1') {
+    try {
+      const count = downloadBackupFile();
+      homeStatusMsg.textContent = '已下載備份檔（' + count + ' 筆品項），本分頁即將自動關閉…';
+      setTimeout(() => { try { window.close(); } catch (e) {} }, 1800);
+    } catch (err) {
+      alert('自動備份失敗：' + err.message);
+    }
+  }
+
+  if (params.get('autorestore') === '1') {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML =
+      '<div class="modal-box" style="text-align:center;">' +
+      '<h3 style="margin:0 0 8px;">♻️ 盤點資料恢復</h3>' +
+      '<p style="margin:0 0 16px; font-size:0.9rem; line-height:1.6;">請選擇先前「一鍵備份」下載的 JSON 檔案。<br>還原會覆蓋目前所有品項資料。</p>' +
+      '<button id="arPick" style="width:100%; padding:12px; border:none; border-radius:10px; background:#0f6e3a; color:#fff; font-size:1rem; font-weight:700; cursor:pointer;">選擇備份檔</button>' +
+      '<button id="arCancel" style="width:100%; padding:10px; margin-top:8px; border:1px solid #ccc; border-radius:10px; background:transparent; color:inherit; font-size:0.9rem; cursor:pointer;">取消</button>' +
+      '<input type="file" id="arFile" accept=".json,application/json" style="display:none;">' +
+      '</div>';
+    document.body.appendChild(overlay);
+    const fileInput = overlay.querySelector('#arFile');
+    overlay.querySelector('#arPick').addEventListener('click', () => fileInput.click());
+    overlay.querySelector('#arCancel').addEventListener('click', () => overlay.remove());
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const payload = JSON.parse(reader.result);
+          const t = payload && payload.time ? new Date(payload.time) : null;
+          const timeStr = t && !isNaN(t) ? (t.getFullYear() + '/' + String(t.getMonth() + 1).padStart(2, '0') + '/' + String(t.getDate()).padStart(2, '0') + ' ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0')) : '未知時間';
+          if (!confirm('是否以 ' + timeStr + ' 的備份檔，還原所有品項的完整資料？\n\n這會覆蓋目前每個分類的品項清單。')) return;
+          const n = applyBackupFile(payload);
+          overlay.remove();
+          showHomeStatus('已還原 ' + n + ' 筆品項資料（來源：' + timeStr + '）');
+        } catch (err) {
+          alert('還原失敗：' + err.message);
+        }
+      };
+      reader.onerror = () => alert('讀取檔案失敗');
+      reader.readAsText(file);
+    });
+  }
+})();
+
 renderTabs();
 renderSubTabs();
 renderTable();
