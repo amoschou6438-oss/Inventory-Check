@@ -734,7 +734,7 @@ document.getElementById('menuEnter').addEventListener('click', () => {
   renderTabs();
   renderSubTabs();
   renderTable();
-  focusFirstTarget();
+  focusOrSkip();
 });
 function goHome() {
   countScreen.style.display = 'none';
@@ -1081,7 +1081,7 @@ function renderTabs() {
       renderSubTabs();
       renderTable();
       hideHint();
-      focusFirstTarget();
+      focusOrSkip();
     });
     tabsEl.appendChild(btn);
   });
@@ -1110,7 +1110,7 @@ function renderSubTabs() {
       renderSubTabs();
       renderTable();
       hideHint();
-      focusFirstTarget();
+      focusOrSkip();
     });
     subtabsEl.appendChild(btn);
   });
@@ -1187,7 +1187,32 @@ function pageHasBlank(pg) {
   return rows.some(r => (pg.s === null || getSubgroupKey(r.code) === pg.s) && isBlankData(r));
 }
 
+// 該分頁所有品項的盤點數量都是預設值 0（完全不需要盤點）
+function pageAllZero(g, sk) {
+  const rows = (DATA[g] || []).filter(r => sk === null || getSubgroupKey(r.code) === sk);
+  return rows.length > 0 && rows.every(r => String(r.count_qty === null || r.count_qty === undefined ? '' : r.count_qty).trim() === '0');
+}
+
+// 進入分頁時：若該分頁盤點數量全為預設 0，自動跳到下一個需要盤點的分頁／子分頁
+function focusOrSkip() {
+  if (!searchTerm.trim() && pageAllZero(currentGroup, currentSubGroup) && jumpToNextPageWithBlank()) return;
+  focusFirstTarget();
+}
+
+// 本分頁最後一個空白填完後，停頓約 1 秒（讓多位數可以輸完）自動跳到下一分頁
+let autoAdvanceTimer = null;
+function scheduleAutoAdvance() {
+  clearTimeout(autoAdvanceTimer);
+  autoAdvanceTimer = setTimeout(() => {
+    if (searchTerm.trim()) return;
+    const stillBlank = Array.from(tbodyEl.querySelectorAll('tr')).some(isBlankRow);
+    if (stillBlank) return;
+    if (!jumpToNextPageWithBlank()) showStatus('全部分頁已盤點完畢');
+  }, 1000);
+}
+
 function jumpToNextPageWithBlank() {
+  clearTimeout(autoAdvanceTimer);
   const pages = getPageList();
   let idx = pages.findIndex(pg => pg.g === currentGroup && (pg.s === null || pg.s === currentSubGroup));
   if (idx < 0) idx = 0;
@@ -1296,7 +1321,12 @@ function renderTable() {
 
     // 盤點數量欄
     const tdCount = makeCell(row.count_qty, true);
-    tdCount.addEventListener('input', () => { row.count_qty = tdCount.textContent; });
+    tdCount.addEventListener('focus', () => { tdCount.dataset.wasBlank = tdCount.textContent.trim() === '' ? '1' : '0'; });
+    tdCount.addEventListener('input', () => {
+      row.count_qty = tdCount.textContent;
+      // 這格原本是空白、現在填完了 → 若本分頁已無空白（其餘皆已有數值或預設 0），稍待片刻自動跳到下一分頁
+      if (tdCount.dataset.wasBlank === '1' && tdCount.textContent.trim() !== '') scheduleAutoAdvance();
+    });
     tdCount.setAttribute('enterkeyhint', 'next');
     tdCount.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) {
