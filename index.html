@@ -245,23 +245,31 @@
     width: 100%;
     z-index: 70;
     display: none;
-    justify-content: flex-end;
+    justify-content: center;      /* 置中：不會和右下角的 🏠、⬆ 重疊 */
     padding: 0 12px;
     pointer-events: none;
+  }
+  /* 一律固定深藍底＋白字（不受全域 button:hover 影響；手機點過後 :hover 會殘留，會讓底色變淺、白字看不見） */
+  .next-btn,
+  .next-btn:hover,
+  .next-btn:active,
+  .next-btn:focus {
+    background: #1c2340;
+    color: #ffffff;
+    border: 2px solid #d4af5a;
+    outline: none;
   }
   .next-btn {
     pointer-events: auto;
     min-height: 0;
-    padding: 11px 26px;
-    border: 2px solid #d4af5a;
+    padding: 11px 30px;
     border-radius: 999px;
-    background: #1c2340;
-    color: #ffffff;
     font-size: 1.05rem;
     font-weight: 700;
     box-shadow: 0 4px 14px rgba(0,0,0,0.3);
     -webkit-user-select: none;
     user-select: none;
+    -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
   }
   .next-btn:active { transform: scale(0.95); }
@@ -817,6 +825,7 @@ document.getElementById('menuEnter').addEventListener('click', () => {
 });
 function goHome() {
   nextBar.style.display = 'none';
+  nextBarShown = false;
   countScreen.style.display = 'none';
   homeScreen.style.display = 'block';
   hideHint();
@@ -829,31 +838,32 @@ document.getElementById('floatHomeBtn').addEventListener('click', goHome);
 const nextBar = document.getElementById('nextBar');
 const nextBtn = document.getElementById('nextBtn');
 const isCountCell = el => !!el && el.tagName === 'TD' && el.isContentEditable && el.cellIndex === 1 && el.parentElement && el.parentElement.parentElement === tbodyEl;
-function positionNextBar() {
+// 顯示與位置：每一幀檢查一次（鍵盤彈出、頁面捲動、換格、重新繪製表格時都不會漏掉或錯位）
+let nextBarShown = false, nextBarLastOn = 0, nextBarKey = '';
+function updateNextBar() {
+  const now = performance.now();
+  const wantOn = navigator.maxTouchPoints > 0 && countScreen.style.display !== 'none' && isCountCell(document.activeElement);
+  if (wantOn) nextBarLastOn = now;
+  // 換格／重新繪製的瞬間焦點會短暫消失：0.4 秒內視為仍在輸入，不隱藏
+  const on = wantOn || (nextBarShown && now - nextBarLastOn < 400 && countScreen.style.display !== 'none');
+  if (on !== nextBarShown) {
+    nextBarShown = on;
+    nextBar.style.display = on ? 'flex' : 'none';
+    nextBarKey = '';
+  }
+  if (!on) return;
   const vv = window.visualViewport;
   if (!vv) return;
   const h = nextBar.offsetHeight || 52;
+  const key = [vv.offsetTop, vv.offsetLeft, vv.height, vv.width, h].join('|');
+  if (key === nextBarKey) return;
+  nextBarKey = key;
   nextBar.style.top = (vv.offsetTop + vv.height - h - 8) + 'px';
   nextBar.style.bottom = 'auto';
   nextBar.style.left = vv.offsetLeft + 'px';
   nextBar.style.width = vv.width + 'px';
 }
-// 鍵盤是否已彈出（iPhone 鍵盤彈出時 visualViewport 會變矮）；沒有鍵盤時不顯示，避免蓋住右下角按鈕
-const keyboardIsUp = () => {
-  const vv = window.visualViewport;
-  return !vv || (window.innerHeight - vv.height > 120);
-};
-function refreshNextBar() {
-  const on = navigator.maxTouchPoints > 0 && countScreen.style.display !== 'none' && isCountCell(document.activeElement) && keyboardIsUp();
-  nextBar.style.display = on ? 'flex' : 'none';
-  if (on) positionNextBar();
-}
-document.addEventListener('focusin', refreshNextBar);
-document.addEventListener('focusout', () => setTimeout(refreshNextBar, 150));
-if (window.visualViewport) {
-  visualViewport.addEventListener('resize', refreshNextBar);
-  visualViewport.addEventListener('scroll', () => { if (nextBar.style.display !== 'none') positionNextBar(); });
-}
+(function nextBarLoop() { updateNextBar(); requestAnimationFrame(nextBarLoop); })();
 function nextFromActive() {
   const el = document.activeElement;
   if (!isCountCell(el)) return;
