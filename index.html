@@ -812,19 +812,33 @@ function sheetXml(rows, colWidths) {
   return xml;
 }
 
-// 取得匯出用的「廠內庫存」：以畫面上輸入的「盤點數量」為準；尚未輸入時才沿用原本的 factory_qty
-function exportQty(r) {
-  let v = r.count_qty;
-  if (v === null || v === undefined || String(v).trim() === '') v = r.factory_qty;
-  if (v === null || v === undefined) return '';
-  if (typeof v === 'number') return v;
-  // 全形數字／符號轉半形、去除空白與千分位逗號，能轉成數字就以數字寫入（才能套用紅色字體）
+// 文字轉數字：全形轉半形、去除空白與千分位逗號；無法轉成數字時回傳 null
+function toNum(v) {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
   const t = String(v)
     .replace(/[\uFF01-\uFF5E]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
     .replace(/[\s,]/g, '');
-  if (t === '') return '';
+  if (t === '') return null;
   const n = Number(t);
-  return Number.isFinite(n) ? n : String(v).trim();
+  return Number.isFinite(n) ? n : null;
+}
+
+// 匯出用的「廠內庫存」＝ 盤點數量 × 內包裝數量
+//  - 內包裝數量為 0、空白或不是數字：視為不需換算（×1），直接用盤點數量
+//  - 尚未輸入盤點數量：沿用原本的 factory_qty
+//  - 盤點數量不是數字（例如輸入文字）：原樣寫入，不換算
+function exportQty(r) {
+  const raw = r.count_qty;
+  if (raw === null || raw === undefined || String(raw).trim() === '') {
+    const f = toNum(r.factory_qty);
+    return f === null ? '' : f;
+  }
+  const count = toNum(raw);
+  if (count === null) return String(raw).trim();
+  const inner = toNum(r.inner_qty);
+  const mult = (inner !== null && inner !== 0) ? inner : 1;
+  return Math.round(count * mult * 1e6) / 1e6;   // 避免 22.68×3 這類浮點誤差
 }
 
 function buildInventoryXlsx(dataByGroup) {
@@ -894,7 +908,7 @@ function buildInventoryXlsx(dataByGroup) {
   return makeZip(files);
 }
 
-// ② 盤點匯出 Excel（僅含貨品名稱及廠內庫存，所有分類合併成單一工作表）
+// ② 盤點匯出 Excel（僅含貨品名稱及廠內庫存＝盤點數量×內包裝數量，所有分類合併成單一工作表）
 document.getElementById('menuExport').addEventListener('click', () => {
   try {
     const bytes = buildInventoryXlsx(DATA);
