@@ -625,7 +625,7 @@
   </div>
 
   <h1 class="count-title"><span class="title-logo" role="img" aria-label="庫存盤點 Logo"></span><span class="title-text">得來素庫存盤點</span></h1>
-  <div class="subtitle">依貨品編號前方英文字母分頁（D 類再依第二碼細分子分頁） &middot; 點選任一品項會自動向左展開盤點單位提示 &middot; 名稱與盤點數量皆可直接點擊修改 &middot; 輸入數量後按 Enter，自動跳到下一個空白的盤點數量</div>
+  <div class="subtitle">依貨品編號前方英文字母分頁（D 類再依第二碼細分子分頁） &middot; 點選任一品項會自動向左展開盤點單位提示 &middot; 名稱與盤點數量皆可直接點擊修改 &middot; 輸入數量後按 Enter，自動跳到下一個空白的盤點數量，本分頁輸入完畢會自動跳到下一個分頁</div>
 
   <div class="toolbar">
     <input id="searchBox" class="search-box" type="text" placeholder="搜尋貨品名稱...">
@@ -1156,12 +1156,58 @@ function goNextTarget(fromTr) {
   while (next && !isBlankRow(next)) next = next.nextElementSibling;
   if (next) {
     focusCountCell(next);
+  } else if (!searchTerm.trim() && jumpToNextPageWithBlank()) {
+    // 本分頁已輸入完畢 → 已自動跳到下一個有空白的子分頁／分頁
   } else {
     if (document.activeElement) document.activeElement.blur();
     closeRowHint();
     const left = Array.from(tbodyEl.querySelectorAll('tr')).filter(isBlankRow).length;
-    showStatus(left ? `已到本分頁最後，尚有 ${left} 項空白` : '本分頁已盤點完畢');
+    showStatus(left ? `已到本分頁最後，尚有 ${left} 項空白` : (searchTerm.trim() ? '搜尋結果已盤點完畢' : '全部分頁已盤點完畢'));
   }
+}
+
+// ---- 本分頁輸入完畢後，自動跳到下一個「還有空白盤點數量」的子分頁／分頁 ----
+const isBlankData = r => String(r.count_qty === null || r.count_qty === undefined ? '' : r.count_qty).trim() === '';
+
+// 依畫面順序列出所有分頁（D 類含子分頁）
+function getPageList() {
+  const pages = [];
+  Object.keys(DATA).forEach(g => {
+    if (SUBGROUP_GROUPS.includes(g)) {
+      Object.keys(getSubgroupsFor(g)).sort().forEach(sk => pages.push({ g, s: sk }));
+    } else {
+      pages.push({ g, s: null });
+    }
+  });
+  return pages;
+}
+
+function pageHasBlank(pg) {
+  const rows = DATA[pg.g] || [];
+  return rows.some(r => (pg.s === null || getSubgroupKey(r.code) === pg.s) && isBlankData(r));
+}
+
+function jumpToNextPageWithBlank() {
+  const pages = getPageList();
+  let idx = pages.findIndex(pg => pg.g === currentGroup && (pg.s === null || pg.s === currentSubGroup));
+  if (idx < 0) idx = 0;
+  // 先往後找，找不到再從頭找（補到中間漏掉的空白）
+  for (let step = 1; step < pages.length; step++) {
+    const pg = pages[(idx + step) % pages.length];
+    if (!pageHasBlank(pg)) continue;
+    currentGroup = pg.g;
+    currentSubGroup = pg.s;
+    renderTabs();
+    renderSubTabs();
+    renderTable();
+    hideHint();
+    focusFirstTarget();
+    const gLabel = GROUP_LABELS[pg.g] || (pg.g + ' 類');
+    showStatus('已跳到「' + gLabel + (pg.s ? '／' + getSubgroupLabel(pg.g, pg.s) : '') + '」');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return true;
+  }
+  return false;
 }
 
 // 目前展開盤點單位提示的那一列（同時間只會有一列展開）
