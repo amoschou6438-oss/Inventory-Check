@@ -237,6 +237,34 @@
     background: var(--accent);
     color: #ffffff;
   }
+  .next-bar {
+    position: fixed;
+    left: 0;
+    top: auto;
+    bottom: 8px;
+    width: 100%;
+    z-index: 70;
+    display: none;
+    justify-content: flex-end;
+    padding: 0 12px;
+    pointer-events: none;
+  }
+  .next-btn {
+    pointer-events: auto;
+    min-height: 0;
+    padding: 11px 26px;
+    border: 2px solid #d4af5a;
+    border-radius: 999px;
+    background: #1c2340;
+    color: #ffffff;
+    font-size: 1.05rem;
+    font-weight: 700;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+  }
+  .next-btn:active { transform: scale(0.95); }
   .float-top-btn {
     position: fixed;
     right: 18px;
@@ -679,6 +707,7 @@
 
   <button id="floatHomeBtn" class="float-home-btn" title="回到主畫面" aria-label="回到主畫面">🏠</button>
   <button id="floatTopBtn" class="float-top-btn" title="回到最上面" aria-label="回到最上面"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14"/><path d="M12 20V9"/><path d="M6 14l6-6 6 6"/></svg></button>
+  <div id="nextBar" class="next-bar"><button id="nextBtn" class="next-btn" type="button">下一項 ›</button></div>
 
   <div id="zeroToggleBar" class="zero-toggle-bar" style="display:none;">
     <div class="zero-pill" role="group" aria-label="盤點數量為 0 的品項">
@@ -787,11 +816,57 @@ document.getElementById('menuEnter').addEventListener('click', () => {
   focusOrSkip();
 });
 function goHome() {
+  nextBar.style.display = 'none';
   countScreen.style.display = 'none';
   homeScreen.style.display = 'block';
   hideHint();
 }
 document.getElementById('floatHomeBtn').addEventListener('click', goHome);
+
+// ---- 手機鍵盤上方的「下一項」鈕 ----
+// iPhone 按鍵盤上的 ✓ 會把鍵盤收起，網頁沒辦法再自動叫出來；
+// 這個鈕按下去不會收起鍵盤，游標與鍵盤會直接留在下一個品項
+const nextBar = document.getElementById('nextBar');
+const nextBtn = document.getElementById('nextBtn');
+const isCountCell = el => !!el && el.tagName === 'TD' && el.isContentEditable && el.cellIndex === 1 && el.parentElement && el.parentElement.parentElement === tbodyEl;
+function positionNextBar() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const h = nextBar.offsetHeight || 52;
+  nextBar.style.top = (vv.offsetTop + vv.height - h - 8) + 'px';
+  nextBar.style.bottom = 'auto';
+  nextBar.style.left = vv.offsetLeft + 'px';
+  nextBar.style.width = vv.width + 'px';
+}
+// 鍵盤是否已彈出（iPhone 鍵盤彈出時 visualViewport 會變矮）；沒有鍵盤時不顯示，避免蓋住右下角按鈕
+const keyboardIsUp = () => {
+  const vv = window.visualViewport;
+  return !vv || (window.innerHeight - vv.height > 120);
+};
+function refreshNextBar() {
+  const on = navigator.maxTouchPoints > 0 && countScreen.style.display !== 'none' && isCountCell(document.activeElement) && keyboardIsUp();
+  nextBar.style.display = on ? 'flex' : 'none';
+  if (on) positionNextBar();
+}
+document.addEventListener('focusin', refreshNextBar);
+document.addEventListener('focusout', () => setTimeout(refreshNextBar, 150));
+if (window.visualViewport) {
+  visualViewport.addEventListener('resize', refreshNextBar);
+  visualViewport.addEventListener('scroll', () => { if (nextBar.style.display !== 'none') positionNextBar(); });
+}
+function nextFromActive() {
+  const el = document.activeElement;
+  if (!isCountCell(el)) return;
+  el.dataset.dirty = '0';        // 避免被當成「按 ✓ 收起鍵盤」而重複跳一次
+  el.dataset.wasBlank = '0';
+  clearTimeout(autoAdvanceTimer);
+  goNextTarget(el.parentElement);
+}
+// 觸控：touchstart 不放開焦點，touchend 才執行（仍屬於使用者的點按，鍵盤不會收起）
+nextBtn.addEventListener('touchstart', e => { e.preventDefault(); }, { passive: false });
+nextBtn.addEventListener('touchend', e => { e.preventDefault(); nextFromActive(); }, { passive: false });
+nextBtn.addEventListener('mousedown', e => e.preventDefault());   // 滑鼠：不搶走輸入格的焦點
+nextBtn.addEventListener('click', nextFromActive);
 document.getElementById('floatTopBtn').addEventListener('click', () => {
   clearTimeout(autoAdvanceTimer);
   window.scrollTo({ top: 0, behavior: 'smooth' });
