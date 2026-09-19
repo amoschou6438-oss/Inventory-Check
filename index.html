@@ -1175,17 +1175,16 @@ document.getElementById('menuBackup').addEventListener('click', async () => {
   let count = 0;
   Object.keys(payload.data).forEach(k => { count += payload.data[k].length; });
   const fileName = '庫存盤點備份_' + fmtStamp(new Date(payload.time)) + '.json';
-  try { localStorage.setItem(BACKUP_KEY, JSON.stringify({ time: payload.time, data: payload.data })); } catch (e) {}
   try {
     const how = await saveBackupFileToDevice(JSON.stringify(payload, null, 2), fileName);
-    if (how === 'cancel') showHomeStatus('已取消儲存備份檔（瀏覽器內仍保留一份備份）', 6000);
+    if (how === 'cancel') showHomeStatus('已取消儲存備份檔', 4000);
     else if (how === 'download') {
       showHomeStatus('已備份 ' + count + ' 筆品項，備份檔：' + fileName, 7000);
       showDownloadNotice(fileName);
     } else showHomeStatus('已備份 ' + count + ' 筆品項，備份檔：' + fileName, 7000);
   } catch (err) {
     console.error(err);
-    alert('備份檔儲存失敗：' + err.message + '\n（瀏覽器內仍保留一份備份）');
+    alert('備份檔儲存失敗：' + err.message);
   }
 });
 
@@ -1897,9 +1896,8 @@ searchBox.addEventListener('input', (e) => {
   renderTable();
 });
 
-// ④-2 盤點資料恢復：先選擇來源（瀏覽器內最近一次備份／備份檔）
+// ④-2 盤點資料恢復：按下後直接選擇備份檔還原（不再提供「瀏覽器內的備份」選項）
 const menuRestoreEl = document.getElementById('menuRestore');
-let restoreDirect = false;
 function fmtBackupTime(iso) {
   const t = iso ? new Date(iso) : null;
   if (!t || isNaN(t)) return '未知時間';
@@ -1907,31 +1905,15 @@ function fmtBackupTime(iso) {
   return t.getFullYear() + '/' + p(t.getMonth() + 1) + '/' + p(t.getDate()) + ' ' + p(t.getHours()) + ':' + p(t.getMinutes());
 }
 menuRestoreEl.addEventListener('click', (e) => {
-  if (restoreDirect) { restoreDirect = false; return; }   // 選了「瀏覽器內的備份」→ 走原本的還原流程
-  e.stopImmediatePropagation();
-  let browserTime = null;
-  try { const raw = localStorage.getItem(BACKUP_KEY); if (raw) browserTime = JSON.parse(raw).time || 'unknown'; } catch (err) {}
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay';
-  overlay.innerHTML =
-    '<div class="modal-box" style="text-align:center;">' +
-    '<h3 class="modal-title">♻️ 盤點資料恢復</h3>' +
-    '<button id="rsBrowser" style="width:100%; padding:12px; border:none; border-radius:10px; background:#0f6e3a; color:#fff; font-size:1rem; font-weight:700;">' +
-      (browserTime ? '還原瀏覽器內的備份<br><span style="font-size:0.8rem; font-weight:400;">' + fmtBackupTime(browserTime === 'unknown' ? null : browserTime) + '</span>' : '瀏覽器內沒有備份') + '</button>' +
-    '<button id="rsFile" style="width:100%; padding:12px; margin-top:10px; border:none; border-radius:10px; background:#1c2340; color:#fff; font-size:1rem; font-weight:700;">從備份檔還原（選擇檔案）</button>' +
-    '<button id="rsCancel" style="width:100%; padding:10px; margin-top:10px; border:1px solid #ccc; border-radius:10px; background:transparent; color:inherit; font-size:0.9rem;">取消</button>' +
-    '<input type="file" id="rsFileInput" accept=".json,.txt,application/json,text/plain" style="display:none;">' +
-    '</div>';
-  document.body.appendChild(overlay);
-  const browserBtn = overlay.querySelector('#rsBrowser');
-  if (!browserTime) { browserBtn.disabled = true; browserBtn.style.opacity = '0.5'; }
-  browserBtn.addEventListener('click', () => { overlay.remove(); restoreDirect = true; menuRestoreEl.click(); });
-  const fileInput = overlay.querySelector('#rsFileInput');
-  overlay.querySelector('#rsFile').addEventListener('click', () => fileInput.click());
-  overlay.querySelector('#rsCancel').addEventListener('click', () => overlay.remove());
-  overlay.addEventListener('click', (ev) => { if (ev.target === overlay) overlay.remove(); });
+  e.stopImmediatePropagation();   // 取代原本「從瀏覽器讀回備份」的流程
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = '.json,.txt,application/json,text/plain';
+  fileInput.style.display = 'none';
+  document.body.appendChild(fileInput);
   fileInput.addEventListener('change', () => {
     const file = fileInput.files && fileInput.files[0];
+    fileInput.remove();
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
@@ -1940,7 +1922,6 @@ menuRestoreEl.addEventListener('click', (e) => {
         const timeStr = fmtBackupTime(payload && payload.time);
         if (!confirm('是否以 ' + timeStr + ' 的備份檔，還原所有品項的完整資料？\n\n這會覆蓋目前每個分類的品項清單。')) return;
         const n = applyBackupFile(payload);
-        overlay.remove();
         showHomeStatus('已還原 ' + n + ' 筆品項資料（來源：' + timeStr + '）', 5000);
       } catch (err) {
         alert('還原失敗：' + err.message);
@@ -1949,6 +1930,7 @@ menuRestoreEl.addEventListener('click', (e) => {
     reader.onerror = () => alert('讀取檔案失敗');
     reader.readAsText(file);
   });
+  fileInput.click();
 }, true);
 
 // ⑥ 備份控制台整合：?autobackup=1 自動下載 JSON 備份檔；?autorestore=1 跳出選檔畫面還原
