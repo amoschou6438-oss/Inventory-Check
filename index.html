@@ -213,9 +213,31 @@
     box-shadow: 0 4px 14px rgba(0,0,0,0.28);
   }
   .float-home-btn:hover { background: #232b4d; }
+  .float-top-btn {
+    position: fixed;
+    right: 18px;
+    bottom: 86px;
+    z-index: 50;
+    width: 56px;
+    height: 56px;
+    min-height: 56px;
+    border-radius: 50%;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1c2340;
+    border: 3px solid #d4af5a;
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.28);
+  }
+  .float-top-btn svg { width: 26px; height: 26px; }
+  .float-top-btn:hover { background: #232b4d; }
+  .float-top-btn:active { transform: scale(0.94); }
   .float-home-btn:active { transform: scale(0.94); }
   @media (max-width: 640px) {
     .float-home-btn { right: 14px; bottom: 14px; width: 52px; height: 52px; min-height: 52px; font-size: 1.45rem; }
+    .float-top-btn { right: 14px; bottom: 76px; width: 52px; height: 52px; min-height: 52px; }
   }
   .card {
     background: var(--card-bg);
@@ -636,6 +658,7 @@
   <div class="subtabs" id="subtabs"></div>
 
   <button id="floatHomeBtn" class="float-home-btn" title="回到主畫面" aria-label="回到主畫面">🏠</button>
+  <button id="floatTopBtn" class="float-top-btn" title="回到最上面" aria-label="回到最上面"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14"/><path d="M12 20V9"/><path d="M6 14l6-6 6 6"/></svg></button>
 
   <div class="card">
     <div class="table-wrap">
@@ -743,6 +766,10 @@ function goHome() {
 }
 document.getElementById('backBtn').addEventListener('click', goHome);
 document.getElementById('floatHomeBtn').addEventListener('click', goHome);
+document.getElementById('floatTopBtn').addEventListener('click', () => {
+  clearTimeout(autoAdvanceTimer);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 
 // ---- 內建 XLSX 產生器（不依賴外部 CDN，離線也能使用）----
 function crc32(buf) {
@@ -1143,7 +1170,13 @@ function focusCountCell(tr) {
 
 // 目前分頁中第一個盤點數量為空白的品項（進入盤點程序、切換分頁時使用）
 function focusFirstTarget() {
-  const target = Array.from(tbodyEl.querySelectorAll('tr')).find(isBlankRow);
+  const trs = Array.from(tbodyEl.querySelectorAll('tr'));
+  // 開啟「包裝耗材」分頁時，直接選到「粽葉」品項
+  if (currentGroup === 'E' && !searchTerm.trim()) {
+    const leaf = trs.find(t => t.children[0] && t.children[0].textContent.trim().startsWith('粽葉'));
+    if (leaf) { focusCountCell(leaf); return; }
+  }
+  const target = trs.find(isBlankRow);
   if (target) focusCountCell(target);
   else showStatus('本分頁沒有空白的盤點數量');
 }
@@ -1405,7 +1438,7 @@ function renderTable() {
     // 按手機鍵盤上方的 ✓（完成）會直接收起鍵盤：有輸入過數值且不是點到其他輸入格 → 視同輸入完成
     tdCount.addEventListener('blur', (e) => {
       if (tdCount.dataset.dirty !== '1') return;
-      if (e.relatedTarget && e.relatedTarget.isContentEditable) return;   // 只是換去別的欄位
+      if (e.relatedTarget && (e.relatedTarget.isContentEditable || e.relatedTarget.closest('.float-top-btn'))) return;   // 只是換去別的欄位／點回到最上面
       if (!tr.isConnected || tdCount.textContent.trim() === '') return;
       completeCell();
     });
