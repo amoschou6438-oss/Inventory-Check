@@ -642,10 +642,6 @@
 
 <!-- 盤點畫面 -->
 <div id="countScreen" class="screen" style="display:none;">
-  <div class="back-bar">
-    <button id="backBtn" class="back-btn">← 返回主畫面</button>
-  </div>
-
   <h1 class="count-title"><span class="title-logo" role="img" aria-label="庫存盤點 Logo"></span><span class="title-text">得來素庫存盤點</span></h1>
   <div class="subtitle">依貨品編號前方英文字母分頁（D 類再依第二碼細分子分頁） &middot; 點選任一品項會自動向左展開盤點單位提示 &middot; 名稱與盤點數量皆可直接點擊修改 &middot; 輸入數量後按 Enter，自動跳到下一個空白的盤點數量，本分頁輸入完畢會自動跳到下一個分頁</div>
 
@@ -764,7 +760,6 @@ function goHome() {
   homeScreen.style.display = 'block';
   hideHint();
 }
-document.getElementById('backBtn').addEventListener('click', goHome);
 document.getElementById('floatHomeBtn').addEventListener('click', goHome);
 document.getElementById('floatTopBtn').addEventListener('click', () => {
   clearTimeout(autoAdvanceTimer);
