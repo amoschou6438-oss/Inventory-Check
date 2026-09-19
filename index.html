@@ -1135,6 +1135,10 @@ function focusCountCell(tr) {
   sel.removeAllRanges();
   sel.addRange(range);
   tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  // 手機鍵盤彈出或版面重新排列後，再確認一次仍停在畫面中央
+  setTimeout(() => {
+    if (tr.isConnected) tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, 350);
 }
 
 // 目前分頁中第一個盤點數量為空白的品項（進入盤點程序、切換分頁時使用）
@@ -1229,7 +1233,6 @@ function jumpToNextPageWithBlank() {
     focusFirstTarget();
     const gLabel = GROUP_LABELS[pg.g] || (pg.g + ' 類');
     showStatus('已跳到「' + gLabel + (pg.s ? '／' + getSubgroupLabel(pg.g, pg.s) : '') + '」');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
     return true;
   }
   return false;
