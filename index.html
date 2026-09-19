@@ -809,9 +809,9 @@ const homeStatusMsg = document.getElementById('homeStatusMsg');
 
 const BACKUP_KEY = 'inventory_count_backup_v1';
 
-function showHomeStatus(text) {
+function showHomeStatus(text, ms) {
   homeStatusMsg.textContent = text;
-  setTimeout(() => { if (homeStatusMsg.textContent === text) homeStatusMsg.textContent = ""; }, 2200);
+  setTimeout(() => { if (homeStatusMsg.textContent === text) homeStatusMsg.textContent = ""; }, ms || 2200);
 }
 
 // ① 進入盤點程序
@@ -1092,20 +1092,100 @@ document.getElementById('menuExport').addEventListener('click', () => {
   }
 });
 
-// ③ 盤點資料備份（將所有分類、所有品項的完整欄位與資料——編號、名稱、內包裝數量、單位、盤點數量、廠內庫存、備註等——存進瀏覽器）
-document.getElementById('menuBackup').addEventListener('click', () => {
+// ③ 盤點資料備份：把所有分類、所有品項的完整欄位與資料存成 JSON 備份檔（會跳出儲存／分享畫面），瀏覽器內也另留一份
+// 手機：開啟分享選單（選「儲存到檔案」）；電腦：跳出「另存新檔」視窗；都不支援時直接下載
+let lastShareDiag = null;
+async function saveBackupFileToDevice(json, fileName) {
+  const file = new File([json], fileName, { type: 'application/json' });
+  // ① 支援「另存新檔」視窗的瀏覽器（電腦版 Chrome／Edge 等）：可自己選資料夾與檔名
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: fileName,
+        types: [{ description: '庫存盤點備份檔', accept: { 'application/json': ['.json'] } }]
+      });
+      const w = await handle.createWritable();
+      await w.write(json);
+      await w.close();
+      return 'saved';
+    } catch (e) {
+      if (e && e.name === 'AbortError') return 'cancel';
+    }
+  }
+  // ② 手機（iPhone／Android）：開啟分享選單 → 選「儲存到檔案」即可自己選手機上的資料夾
+  //    iPhone 有時不接受 application/json 類型，所以依序嘗試 json、純文字兩種類型
+  lastShareDiag = {
+    secure: window.isSecureContext,
+    hasShare: typeof navigator.share === 'function',
+    canJson: false,
+    canText: false
+  };
+  const candidates = [['application/json', 'canJson'], ['text/plain', 'canText']];
+  for (const [type, flag] of candidates) {
+    const f = new File([json], fileName, { type });
+    let can = false;
+    try { can = !!(navigator.canShare && navigator.canShare({ files: [f] })); } catch (e) {}
+    lastShareDiag[flag] = can;
+    if (!can) continue;
+    try {
+      await navigator.share({ files: [f], title: '庫存盤點備份' });
+      return 'shared';
+    } catch (e) {
+      if (e && e.name === 'AbortError') return 'cancel';
+    }
+  }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  return 'download';
+}
+
+// 瀏覽器不支援「選擇儲存位置」時：檔案已直接下載，這裡說明檔案在哪、怎麼改成自己選
+function shareDiagText() {
+  const d = lastShareDiag || {};
+  const yn = v => v ? '是' : '否';
+  let t = '安全連線(https) ' + yn(d.secure) + '、瀏覽器有分享功能 ' + yn(d.hasShare) + '、可分享檔案 ' + yn(d.canJson || d.canText);
+  if (!d.secure) t += '。目前不是 https 開啟，iPhone 不允許網頁叫出「儲存到檔案」，請改用 https 網址開啟這個網頁';
+  return t;
+}
+function showDownloadNotice(fileName) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML =
+    '<div class="modal-box">' +
+    '<h3 class="modal-title">💾 備份檔已下載</h3>' +
+    '<p style="margin:0 0 10px; font-size:0.92rem; line-height:1.65;">這個瀏覽器不支援在網頁內直接選擇儲存位置，備份檔已存到瀏覽器預設的下載位置：<br><b style="word-break:break-all;">' + fileName + '</b></p>' +
+    '<p style="margin:0 0 6px; font-size:0.85rem; line-height:1.65;"><b>iPhone／iPad（Safari）</b>：點網址列的下載圖示 → 點該檔案 → 分享鈕 → 「儲存到檔案」，即可自己選資料夾。</p>' +
+    '<p style="margin:0 0 14px; font-size:0.85rem; line-height:1.65;"><b>電腦</b>：到瀏覽器設定開啟「下載前詢問每個檔案的儲存位置」，之後每次備份都會讓你選。（Chrome、Edge 已可直接選擇位置）</p>' +
+    '<p style="margin:0 0 14px; font-size:0.78rem; line-height:1.6; color:#888;">偵測結果：' + shareDiagText() + '</p>' +
+    '<button id="dnOk" style="width:100%; padding:12px; border:none; border-radius:10px; background:#0f6e3a; color:#fff; font-size:1rem; font-weight:700;">知道了</button>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  overlay.querySelector('#dnOk').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (ev) => { if (ev.target === overlay) overlay.remove(); });
+}
+
+document.getElementById('menuBackup').addEventListener('click', async () => {
+  const payload = buildBackupFile();
   let count = 0;
-  Object.keys(DATA).forEach(key => { count += DATA[key].length; });
-  // 深複製，避免備份內容之後隨畫面編輯而跟著變動
-  const payload = { time: new Date().toISOString(), data: JSON.parse(JSON.stringify(DATA)) };
+  Object.keys(payload.data).forEach(k => { count += payload.data[k].length; });
+  const fileName = '庫存盤點備份_' + fmtStamp(new Date(payload.time)) + '.json';
+  try { localStorage.setItem(BACKUP_KEY, JSON.stringify({ time: payload.time, data: payload.data })); } catch (e) {}
   try {
-    localStorage.setItem(BACKUP_KEY, JSON.stringify(payload));
-    const t = new Date(payload.time);
-    const timeStr = t.getFullYear() + '/' + String(t.getMonth() + 1).padStart(2, '0') + '/' + String(t.getDate()).padStart(2, '0') + ' ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
-    showHomeStatus(`已備份 ${count} 筆品項的完整資料（含編號、名稱、單位、數量等所有欄位，${timeStr}）`);
+    const how = await saveBackupFileToDevice(JSON.stringify(payload, null, 2), fileName);
+    if (how === 'cancel') showHomeStatus('已取消儲存備份檔（瀏覽器內仍保留一份備份）', 6000);
+    else if (how === 'download') {
+      showHomeStatus('已備份 ' + count + ' 筆品項，備份檔：' + fileName, 7000);
+      showDownloadNotice(fileName);
+    } else showHomeStatus('已備份 ' + count + ' 筆品項，備份檔：' + fileName, 7000);
   } catch (err) {
     console.error(err);
-    alert('備份失敗：' + err.message);
+    alert('備份檔儲存失敗：' + err.message + '\n（瀏覽器內仍保留一份備份）');
   }
 });
 
@@ -1817,6 +1897,60 @@ searchBox.addEventListener('input', (e) => {
   renderTable();
 });
 
+// ④-2 盤點資料恢復：先選擇來源（瀏覽器內最近一次備份／備份檔）
+const menuRestoreEl = document.getElementById('menuRestore');
+let restoreDirect = false;
+function fmtBackupTime(iso) {
+  const t = iso ? new Date(iso) : null;
+  if (!t || isNaN(t)) return '未知時間';
+  const p = n => String(n).padStart(2, '0');
+  return t.getFullYear() + '/' + p(t.getMonth() + 1) + '/' + p(t.getDate()) + ' ' + p(t.getHours()) + ':' + p(t.getMinutes());
+}
+menuRestoreEl.addEventListener('click', (e) => {
+  if (restoreDirect) { restoreDirect = false; return; }   // 選了「瀏覽器內的備份」→ 走原本的還原流程
+  e.stopImmediatePropagation();
+  let browserTime = null;
+  try { const raw = localStorage.getItem(BACKUP_KEY); if (raw) browserTime = JSON.parse(raw).time || 'unknown'; } catch (err) {}
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML =
+    '<div class="modal-box" style="text-align:center;">' +
+    '<h3 class="modal-title">♻️ 盤點資料恢復</h3>' +
+    '<button id="rsBrowser" style="width:100%; padding:12px; border:none; border-radius:10px; background:#0f6e3a; color:#fff; font-size:1rem; font-weight:700;">' +
+      (browserTime ? '還原瀏覽器內的備份<br><span style="font-size:0.8rem; font-weight:400;">' + fmtBackupTime(browserTime === 'unknown' ? null : browserTime) + '</span>' : '瀏覽器內沒有備份') + '</button>' +
+    '<button id="rsFile" style="width:100%; padding:12px; margin-top:10px; border:none; border-radius:10px; background:#1c2340; color:#fff; font-size:1rem; font-weight:700;">從備份檔還原（選擇檔案）</button>' +
+    '<button id="rsCancel" style="width:100%; padding:10px; margin-top:10px; border:1px solid #ccc; border-radius:10px; background:transparent; color:inherit; font-size:0.9rem;">取消</button>' +
+    '<input type="file" id="rsFileInput" accept=".json,.txt,application/json,text/plain" style="display:none;">' +
+    '</div>';
+  document.body.appendChild(overlay);
+  const browserBtn = overlay.querySelector('#rsBrowser');
+  if (!browserTime) { browserBtn.disabled = true; browserBtn.style.opacity = '0.5'; }
+  browserBtn.addEventListener('click', () => { overlay.remove(); restoreDirect = true; menuRestoreEl.click(); });
+  const fileInput = overlay.querySelector('#rsFileInput');
+  overlay.querySelector('#rsFile').addEventListener('click', () => fileInput.click());
+  overlay.querySelector('#rsCancel').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (ev) => { if (ev.target === overlay) overlay.remove(); });
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const payload = JSON.parse(reader.result);
+        const timeStr = fmtBackupTime(payload && payload.time);
+        if (!confirm('是否以 ' + timeStr + ' 的備份檔，還原所有品項的完整資料？\n\n這會覆蓋目前每個分類的品項清單。')) return;
+        const n = applyBackupFile(payload);
+        overlay.remove();
+        showHomeStatus('已還原 ' + n + ' 筆品項資料（來源：' + timeStr + '）', 5000);
+      } catch (err) {
+        alert('還原失敗：' + err.message);
+      }
+    };
+    reader.onerror = () => alert('讀取檔案失敗');
+    reader.readAsText(file);
+  });
+}, true);
+
 // ⑥ 備份控制台整合：?autobackup=1 自動下載 JSON 備份檔；?autorestore=1 跳出選檔畫面還原
 const BACKUP_FILE_TAG = 'inventory-count-backup';
 function fmtStamp(d) {
@@ -1886,7 +2020,7 @@ function applyBackupFile(payload) {
       '<p style="margin:0 0 16px; font-size:0.9rem; line-height:1.6;">請選擇先前「一鍵備份」下載的 JSON 檔案。<br>還原會覆蓋目前所有品項資料。</p>' +
       '<button id="arPick" style="width:100%; padding:12px; border:none; border-radius:10px; background:#0f6e3a; color:#fff; font-size:1rem; font-weight:700; cursor:pointer;">選擇備份檔</button>' +
       '<button id="arCancel" style="width:100%; padding:10px; margin-top:8px; border:1px solid #ccc; border-radius:10px; background:transparent; color:inherit; font-size:0.9rem; cursor:pointer;">取消</button>' +
-      '<input type="file" id="arFile" accept=".json,application/json" style="display:none;">' +
+      '<input type="file" id="arFile" accept=".json,.txt,application/json,text/plain" style="display:none;">' +
       '</div>';
     document.body.appendChild(overlay);
     const fileInput = overlay.querySelector('#arFile');
