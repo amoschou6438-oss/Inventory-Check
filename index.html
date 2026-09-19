@@ -1324,25 +1324,90 @@ function renderTable() {
 
     // 盤點數量欄
     const tdCount = makeCell(row.count_qty, true);
-    tdCount.addEventListener('focus', () => { tdCount.dataset.wasBlank = tdCount.textContent.trim() === '' ? '1' : '0'; });
+    tdCount.addEventListener('focus', () => {
+      tdCount.dataset.wasBlank = tdCount.textContent.trim() === '' ? '1' : '0';
+      tdCount.dataset.dirty = '0';
+    });
+
+    // 只允許數字（含一個小數點）；手機顯示數字鍵盤
+    tdCount.setAttribute('inputmode', 'decimal');
+    tdCount.setAttribute('enterkeyhint', 'next');
+    const cleanNumber = (txt, existing) => {
+      let out = String(txt).replace(/[^0-9.]/g, '');
+      const hasDot = String(existing || '').includes('.');
+      let seenDot = hasDot;
+      out = out.split('').filter(ch => {
+        if (ch !== '.') return true;
+        if (seenDot) return false;
+        seenDot = true; return true;
+      }).join('');
+      return out;
+    };
+    const placeCaretAtEnd = () => {
+      const range = document.createRange();
+      range.selectNodeContents(tdCount);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    };
+
+    // 輸入完成（Enter、手機鍵盤的「下一項」、或按 ✓ 收起鍵盤）
+    const completeCell = () => {
+      tdCount.dataset.wasBlank = '0';
+      tdCount.dataset.dirty = '0';
+      clearTimeout(autoAdvanceTimer);
+      goNextTarget(tr);
+    };
+
+    tdCount.addEventListener('beforeinput', (e) => {
+      // 部分手機鍵盤（如 Android）不送 keydown，只送 beforeinput
+      if (e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak') {
+        e.preventDefault();
+        completeCell();
+        return;
+      }
+      if (e.inputType === 'insertText' && e.data != null) {
+        // 選取範圍會被取代時，以「其餘文字」判斷是否已有小數點
+        const sel = window.getSelection();
+        const selected = sel && tdCount.contains(sel.anchorNode) ? sel.toString() : '';
+        const existing = tdCount.textContent.replace(selected, '');
+        if (cleanNumber(e.data, existing) !== e.data) e.preventDefault();
+      } else if (e.inputType === 'insertFromPaste' || e.inputType === 'insertFromDrop') {
+        e.preventDefault();
+        const txt = e.dataTransfer ? e.dataTransfer.getData('text') : '';
+        const cleaned = cleanNumber(txt, tdCount.textContent);
+        if (cleaned) document.execCommand('insertText', false, cleaned);
+      }
+    });
+
     tdCount.addEventListener('input', () => {
+      // 保險：輸入法組字等情況若混入非數字，一律濾掉
+      const raw = tdCount.textContent;
+      const cleaned = cleanNumber(raw, '');
+      if (cleaned !== raw) {
+        tdCount.textContent = cleaned;
+        placeCaretAtEnd();
+      }
+      tdCount.dataset.dirty = '1';
       row.count_qty = tdCount.textContent;
       // 這格原本是空白、現在填完了 → 若本分頁已無空白（其餘皆已有數值或預設 0），稍待片刻自動跳到下一分頁
       if (tdCount.dataset.wasBlank === '1' && tdCount.textContent.trim() !== '') scheduleAutoAdvance();
     });
-    tdCount.setAttribute('enterkeyhint', 'next');
+
     tdCount.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) {
         e.preventDefault();
-        goNextTarget(tr);
+        completeCell();
       }
     });
-    // 部分手機鍵盤（如 Android）不送 keydown，只送 beforeinput
-    tdCount.addEventListener('beforeinput', (e) => {
-      if (e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak') {
-        e.preventDefault();
-        goNextTarget(tr);
-      }
+
+    // 按手機鍵盤上方的 ✓（完成）會直接收起鍵盤：有輸入過數值且不是點到其他輸入格 → 視同輸入完成
+    tdCount.addEventListener('blur', (e) => {
+      if (tdCount.dataset.dirty !== '1') return;
+      if (e.relatedTarget && e.relatedTarget.isContentEditable) return;   // 只是換去別的欄位
+      if (!tr.isConnected || tdCount.textContent.trim() === '') return;
+      completeCell();
     });
 
     tr.appendChild(tdName);
