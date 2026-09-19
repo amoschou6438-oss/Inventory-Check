@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>庫存盤點表</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card-bg: #ffffff;
+    --text: #1f2430;
+    --text-muted: #6b7280;
+    --border: #e2e5eb;
+    --accent: #2f6f4f;
+    --accent-light: #e8f3ec;
+    --zero-bg: #fff4e5;
+    --zero-border: #f0c789;
+    --header-bg: #2f6f4f;
+    --header-text: #ffffff;
+    --hover: #f0f7f3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161a;
+      --card-bg: #1d2025;
+      --text: #e8e9ec;
+      --text-muted: #9aa0aa;
+      --border: #2c3038;
+      --accent: #4caf7d;
+      --accent-light: #223229;
+      --zero-bg: #332a17;
+      --zero-border: #6b5423;
+      --header-bg: #22492f;
+      --header-text: #f1f5f2;
+      --hover: #202823;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161a;
+    --card-bg: #1d2025;
+    --text: #e8e9ec;
+    --text-muted: #9aa0aa;
+    --border: #2c3038;
+    --accent: #4caf7d;
+    --accent-light: #223229;
+    --zero-bg: #332a17;
+    --zero-border: #6b5423;
+    --header-bg: #22492f;
+    --header-text: #f1f5f2;
+    --hover: #202823;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", -apple-system, BlinkMacSystemFont, sans-serif;
+    padding: 20px;
+  }
+  h1 {
+    font-size: 1.4rem;
+    margin: 0 0 4px 0;
+  }
+  .subtitle {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 16px;
+  }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .search-box {
+    flex: 1;
+    min-width: 180px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card-bg);
+    color: var(--text);
+    font-size: 16px;
+  }
+  button {
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text);
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    min-height: 40px;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  @media (max-width: 640px) {
+    body { padding: 10px 8px 32px; }
+    h1 { font-size: 1.1rem; }
+    .subtitle { font-size: 0.75rem; margin-bottom: 12px; }
+    .toolbar { gap: 8px; }
+    .search-box { flex-basis: 100%; }
+    #addRowBtn, #exportBtn { flex: 1; min-width: 0; font-size: 0.8rem; padding: 9px 10px; }
+    .tabs { gap: 6px; }
+    .tab-btn { padding: 8px 12px; font-size: 0.82rem; flex: 1 1 auto; text-align: center; }
+    table { font-size: 0.85rem; }
+    thead th:nth-child(2), tbody td:nth-child(2) { width: 72px; }
+    thead th:nth-child(3), tbody td:nth-child(3) { width: 32px; }
+    thead th { padding: 8px 6px; }
+    tbody td { padding: 8px 6px; }
+    .name-cell { gap: 4px; }
+    .hint-icon { width: 19px; height: 19px; font-size: 0.68rem; }
+    .del-btn { font-size: 1rem; padding: 4px 6px; }
+  }
+  @media (max-width: 380px) {
+    thead th:nth-child(2), tbody td:nth-child(2) { width: 62px; }
+    table { font-size: 0.8rem; }
+  }
+  button:hover { background: var(--hover); }
+  button.primary {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  button.primary:hover { opacity: 0.9; }
+  .tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .tab-btn {
+    padding: 8px 18px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  .tab-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .table-wrap {
+    overflow-x: auto;
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    table-layout: fixed;
+    font-size: 0.88rem;
+  }
+  thead th:nth-child(1), tbody td:nth-child(1) { width: auto; }
+  thead th:nth-child(2), tbody td:nth-child(2) { width: 92px; }
+  thead th:nth-child(3), tbody td:nth-child(3) { width: 40px; }
+  thead th {
+    position: sticky;
+    top: 0;
+    background: var(--header-bg);
+    color: var(--header-text);
+    text-align: left;
+    padding: 10px 12px;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    white-space: normal;
+    word-break: break-word;
+    vertical-align: middle;
+  }
+  tbody td:nth-child(2) {
+    white-space: nowrap;
+    text-align: center;
+  }
+  tbody td:nth-child(3) {
+    white-space: nowrap;
+    text-align: center;
+  }
+  tbody tr:hover { background: var(--hover); }
+  tbody tr.zero-row { background: var(--zero-bg); }
+  tbody tr.zero-row:hover { background: var(--zero-bg); filter: brightness(0.97); }
+  td[contenteditable="true"] {
+    cursor: text;
+    border-radius: 4px;
+    outline: none;
+    font-size: 16px;
+  }
+  td[contenteditable="true"]:focus {
+    background: var(--accent-light);
+    box-shadow: 0 0 0 2px var(--accent) inset;
+  }
+  td.remark-cell {
+    color: var(--text-muted);
+    min-width: 140px;
+  }
+  tr.zero-row td.remark-cell {
+    color: #8a5a00;
+    font-weight: 600;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) tr.zero-row td.remark-cell { color: #f0c789; }
+  }
+  :root[data-theme="dark"] tr.zero-row td.remark-cell { color: #f0c789; }
+  .del-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 1rem;
+    padding: 2px 6px;
+    border-radius: 6px;
+  }
+  .del-btn:hover { background: var(--zero-bg); color: #c0392b; }
+  .count-badge {
+    display: inline-block;
+    background: var(--accent-light);
+    color: var(--accent);
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    margin-left: 4px;
+  }
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: 10px 2px 0 2px;
+  }
+  .legend-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    background: var(--zero-bg);
+    border: 1px solid var(--zero-border);
+    display: inline-block;
+  }
+  .status-msg {
+    font-size: 0.8rem;
+    color: var(--accent);
+    min-height: 1.2em;
+  }
+  .name-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .name-text {
+    flex: 1;
+    min-width: 60px;
+  }
+  .hint-icon {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    background: var(--accent-light);
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+  }
+  .hint-icon:hover { background: var(--accent); color: white; }
+  .hint-popup {
+    position: fixed;
+    z-index: 50;
+    background: var(--accent);
+    color: white;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(4px);
+    transition: opacity 0.15s, transform 0.15s;
+    white-space: nowrap;
+    max-width: calc(100vw - 24px);
+  }
+  .hint-popup.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .hint-popup::after {
+    content: "";
+    position: absolute;
+    bottom: -6px;
+    left: 16px;
+    border-width: 6px 6px 0 6px;
+    border-style: solid;
+    border-color: var(--accent) transparent transparent transparent;
+  }
+
+  /* 首頁 */
+  .home-wrap {
+    max-width: 480px;
+    margin: 0 auto;
+    padding-top: 6vh;
+  }
+  .home-title {
+    text-align: center;
+    font-size: 1.5rem;
+    margin: 0 0 4px 0;
+  }
+  .home-subtitle {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-bottom: 28px;
+  }
+  .menu-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .menu-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px 10px;
+    color: var(--text);
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+    min-height: 110px;
+    transition: transform 0.1s, border-color 0.15s, box-shadow 0.15s;
+  }
+  .menu-btn:active { transform: scale(0.97); }
+  .menu-btn:hover { border-color: var(--accent); box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+  .menu-btn .menu-icon { font-size: 1.8rem; }
+  .menu-btn.primary-menu { background: var(--accent); color: white; border-color: var(--accent); }
+  .menu-btn.primary-menu:hover { opacity: 0.92; }
+  .menu-btn .menu-desc {
+    font-size: 0.72rem;
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+  .menu-btn.primary-menu .menu-desc { color: rgba(255,255,255,0.85); }
+  .back-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .back-btn {
+    padding: 8px 14px;
+    font-weight: 600;
+  }
+  @media (max-width: 480px) {
+    .home-wrap { padding-top: 8vh; }
+    .menu-btn { min-height: 96px; padding: 16px 8px; font-size: 0.88rem; }
+    .menu-btn .menu-icon { font-size: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 首頁 -->
+<div id="homeScreen" class="screen">
+  <div class="home-wrap">
+    <h1 class="home-title">庫存盤點表</h1>
+    <div class="home-subtitle">請選擇要執行的動作</div>
+    <div class="menu-grid">
+      <div class="menu-btn primary-menu" id="menuEnter">
+        <span class="menu-icon">📋</span>
+        <span>進入盤點程序</span>
+        <span class="menu-desc">依分類點盤</span>
+      </div>
+      <div class="menu-btn" id="menuExport">
+        <span class="menu-icon">📤</span>
+        <span>盤點匯出 Excel</span>
+        <span class="menu-desc">名稱＋廠內庫存</span>
+      </div>
+      <div class="menu-btn" id="menuBackup">
+        <span class="menu-icon">💾</span>
+        <span>盤點數值備份</span>
+        <span class="menu-desc">儲存目前進度</span>
+      </div>
+      <div class="menu-btn" id="menuRestore">
+        <span class="menu-icon">♻️</span>
+        <span>盤點數值恢復</span>
+        <span class="menu-desc">還原備份進度</span>
+      </div>
+    </div>
+    <div id="homeStatusMsg" class="status-msg" style="text-align:center; margin-top:16px;"></div>
+  </div>
+</div>
+
+<!-- 盤點畫面 -->
+<div id="countScreen" class="screen" style="display:none;">
+  <div class="back-bar">
+    <button id="backBtn" class="back-btn">← 返回主畫面</button>
+  </div>
+
+  <h1>庫存盤點表</h1>
+  <div class="subtitle">依貨品編號前方英文字母分頁 &middot; 點選貨品名稱可查看盤點單位提示 &middot; 名稱與盤點數量皆可直接點擊修改</div>
+
+  <div class="toolbar">
+    <input id="searchBox" class="search-box" type="text" placeholder="搜尋貨品名稱...">
+    <button id="addRowBtn" class="primary">＋ 新增一列</button>
+    <span id="statusMsg" class="status-msg"></span>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>貨品名稱</th>
+            <th>盤點數量</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="hintPopup" class="hint-popup"></div>
+
+
+<script>
+const DATA = {"D": [{"code": "DAA01", "name": "高麗菜", "inner_qty": "0", "unit": "公斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA02", "name": "紅蘿蔔", "inner_qty": "22", "unit": "公斤", "count_qty": "0", "factory_qty": 0, "remark": null}, {"code": "DAA03", "name": "香菜", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA04", "name": "撿好九層塔", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA05", "name": "西洋芹", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA06", "name": "馬鈴薯", "inner_qty": "0", "unit": "公斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA07", "name": "牛蕃茄", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA08", "name": "朝天椒", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA09", "name": "大辣椒", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA10", "name": "鮮香菇(下菇)", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA11", "name": "杏鮑菇(D級)", "inner_qty": "0", "unit": "公斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA12", "name": "青江菜", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA13", "name": "黑豆鼓(溼)", "inner_qty": "1", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": null}, {"code": "DAA13-1", "name": "黑豆鼓(溼)", "inner_qty": "1", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": null}, {"code": "DAA14", "name": "薑片", "inner_qty": null, "unit": "斤/包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DAA15", "name": "菜脯", "inner_qty": "1", "unit": "箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DAA15-1", "name": "珍珠脯", "inner_qty": "0", "unit": "箱", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA15-2", "name": "無防腐劑菜脯", "inner_qty": "0", "unit": "箱", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA16", "name": "豆芽菜", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA17", "name": "芹菜", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA18", "name": "金針菇(B級)", "inner_qty": "0", "unit": "公斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA19", "name": "大田金針菇A級", "inner_qty": "0", "unit": "公斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA20", "name": "小耳(濕木耳)", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA20-1", "name": "大耳", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA21", "name": "紅甜椒", "inner_qty": "0", "unit": "公斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA22", "name": "黃甜椒", "inner_qty": "0", "unit": "公斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA23", "name": "包心白菜", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA24", "name": "朴菜", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA25", "name": "梅干菜", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA26", "name": "髮菜", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA27", "name": "翠玉白菜", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA28", "name": "杏鮑菇(B級)", "inner_qty": "0", "unit": "公斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA29", "name": "台式大白菜", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA30", "name": "白蘿蔔", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA31", "name": "真空金針菇", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA32", "name": "小松菜", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA33", "name": "玉米筍", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA34", "name": "青椒", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA35", "name": "水蓮", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DAA36", "name": "好菇道美白菇", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA01", "name": "糯米", "inner_qty": null, "unit": "斤/袋", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DBA02", "name": "冬粉", "inner_qty": "8", "unit": "包/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DBA03", "name": "扣子菇(鈕扣菇)", "inner_qty": null, "unit": "公斤/袋", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DBA04", "name": "香菇頭", "inner_qty": "25", "unit": "公斤/袋", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DBA05", "name": "木耳(乾)", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA06", "name": "松子", "inner_qty": "0", "unit": "公斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA07", "name": "花生片", "inner_qty": "1", "unit": "公斤", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DBA08", "name": "碎肉(大豆蛋白GN-37)", "inner_qty": "20", "unit": "公斤/袋", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DBA08-1", "name": "碎肉V-110(紙袋)", "inner_qty": "20", "unit": "公斤/袋", "count_qty": "0", "factory_qty": 0, "remark": null}, {"code": "DBA09", "name": "素肉角(V-600塊)", "inner_qty": "10", "unit": "公斤/袋", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DBA10", "name": "素肉片(V-600片)", "inner_qty": "10", "unit": "公斤/袋", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DBA11", "name": "小麥肉片(V-G790)", "inner_qty": "10", "unit": "公斤/袋", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DBA12", "name": "皮絲", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA13", "name": "紅辣椒剪條", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA14", "name": "洋菇片", "inner_qty": "6", "unit": "罐/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DBA15", "name": "米豆", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA16", "name": "生土豆", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA17", "name": "長糯米", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA18", "name": "筍絲", "inner_qty": "0", "unit": "公斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA19", "name": "車麩", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA20", "name": "排骨酥", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA21", "name": "紅藜麥", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA22", "name": "花生仁", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA23", "name": "腰果", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA24", "name": "香菇絲", "inner_qty": "0", "unit": "公斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA25", "name": "角螺", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA26", "name": "巴西蘑菇", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA27", "name": "白木耳(乾)", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DBA28", "name": "金針(乾)", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DCA01", "name": "冷凍栗子", "inner_qty": "10", "unit": "包/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DCA02", "name": "雪蓮子(鷹嘴豆)", "inner_qty": "22.68", "unit": "公斤/袋", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DCA03", "name": "十全藥膳包", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DCA03-1", "name": "黃金十全藥膳包(加猴菇及腰果)", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DCA04", "name": "麵螺(麵捲)", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DCA05", "name": "薑絲清蒸素鱈魚(未包裝)", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DCA21", "name": "素旦黃", "inner_qty": "0", "unit": "顆", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DCA31", "name": "Omni新肉絲", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DCA36", "name": "黃豆天貝(方型)", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DCA37", "name": "黃豆皮(四角皮)(千張-非基改)", "inner_qty": "0", "unit": "張", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DCA37-1", "name": "黃豆皮(已裁切)", "inner_qty": "20", "unit": "包/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DCA38", "name": "原味猴頭菇(純素)", "inner_qty": "3", "unit": "斤/包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DCA39", "name": "芋頭角", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DCA40", "name": "脫膜台灣鳳眼果-真空包", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DCA41", "name": "豆包扁魚", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DCA42", "name": "火腿切片", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DDA01", "name": "太白粉(三朵花)", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DDA01-1", "name": "太白粉(青線AVD)(片力粉)", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DDA02", "name": "玉米粉", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DDA03", "name": "起司脆酥粉", "inner_qty": null, "unit": "包/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DDA04", "name": "酥脆粉WD-L006", "inner_qty": null, "unit": "公斤", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DDB01", "name": "中筋麵粉(泰和)", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DDB11", "name": "高筋麵粉(綠國花)", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DDC01", "name": "麩皮(泰和)", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DDC02", "name": "麩皮(洽發)", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DDD01", "name": "三代全麥(洽發)", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DDD11", "name": "小麥蛋白", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DDE01", "name": "品元醋酸澱粉", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DDE11", "name": "食品鹼粉", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DDF01", "name": "餛飩皮", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DDF02", "name": "餛飩皮-艾草", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DDG01", "name": "小刈包", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DEA01", "name": "黑胡椒粉(小磨坊)", "inner_qty": "20", "unit": "包/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA02", "name": "黑胡椒粒(小磨坊)", "inner_qty": "20", "unit": "包/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA03", "name": "二砂糖", "inner_qty": "40", "unit": "包/袋", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA04", "name": "高級精鹽", "inner_qty": "1", "unit": "袋", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA05", "name": "鮮味多", "inner_qty": "24", "unit": "包/箱 ", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA06", "name": "五香粉(小磨坊)", "inner_qty": "12", "unit": "盒/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA07", "name": "甘草粉(小磨坊)", "inner_qty": "12", "unit": "盒/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA08", "name": "八角粉", "inner_qty": "0", "unit": "盒", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DEA09", "name": "孜然粉", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA10", "name": "紅辣椒粉(小磨坊)", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DEA10-1", "name": "紅辣椒粉T(小磨坊)", "inner_qty": null, "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA11", "name": "素食咖哩粉(小磨坊)", "inner_qty": "12", "unit": "包/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA12", "name": "義大利香料250g-新光洋菜", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA13", "name": "甲基纖維素", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DEA14", "name": "麥微纖WF200", "inner_qty": "0", "unit": "公斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DEA15", "name": "迷迭香葉(小磨坊)", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA16", "name": "月桂葉(小磨坊)", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA17", "name": "糖粉", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA18", "name": "花生粉", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DEA19", "name": "素齋寶", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DEA20", "name": "大豆蛋白粉(ISP 880)", "inner_qty": "0", "unit": "公斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DEA21", "name": "紅麴粉", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA22", "name": "小茴香粉", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA23", "name": "海藻糖(1000g)", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA24", "name": "白冰糖(3kg)", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA25", "name": "俄力岡葉250g(小磨坊)", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA26", "name": "胡椒鹽", "inner_qty": "0", "unit": "包", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DEA27", "name": "素黏膠", "inner_qty": null, "unit": "公斤", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DEA28", "name": "小磨坊甜紅椒粉(匈牙利紅椒)", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFA01", "name": "香椿原醬", "inner_qty": "1", "unit": "桶", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFA02", "name": "紅糟", "inner_qty": "0", "unit": "箱", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DFA03", "name": "麻辣醬", "inner_qty": "1", "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFB01", "name": "香油", "inner_qty": "6", "unit": "桶/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFB02", "name": "沙拉油", "inner_qty": "1", "unit": "桶", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFB03", "name": "胡麻油", "inner_qty": "0", "unit": "桶", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DFB04", "name": "正統橄欖義式健康油", "inner_qty": "0", "unit": "罐", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DFB05", "name": "仲味麻油3L", "inner_qty": "6", "unit": "桶", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFB06", "name": "東茂御品珍寶健康調和油2L", "inner_qty": "1", "unit": "桶", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFB07", "name": "耐炸油", "inner_qty": "1", "unit": "桶", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFB08", "name": "芥花油", "inner_qty": "1", "unit": "桶", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFC01", "name": "醬油-金蘭", "inner_qty": "0", "unit": "桶", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DFC02", "name": "素蠔油", "inner_qty": "4", "unit": "桶/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFC03", "name": "素肉醬", "inner_qty": "12", "unit": "罐/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFC04", "name": "豆瓣醬", "inner_qty": "1", "unit": "罐", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFC05", "name": "爌肉精-大罐", "inner_qty": "16", "unit": "罐/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFC06", "name": "素沙茶(愛之味)", "inner_qty": "1", "unit": "桶", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFC07", "name": "素沙茶(牛頭牌)", "inner_qty": "6", "unit": "罐/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFC08", "name": "番茄醬(可果美)", "inner_qty": "6", "unit": "桶/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFC09", "name": "蕃茄糊(可美特)", "inner_qty": "6", "unit": "罐/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFC09-1", "name": "蕃茄糊(可果美)", "inner_qty": "6", "unit": "罐/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFC10", "name": "味醂", "inner_qty": "1", "unit": "罐", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFC11", "name": "工研素烏醋", "inner_qty": "1", "unit": "桶", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFC12", "name": "冷凍檸檬汁", "inner_qty": "1", "unit": "罐", "count_qty": "0", "factory_qty": 0, "remark": null}, {"code": "DFC14", "name": "萬家香純釀造醬油", "inner_qty": "4", "unit": "桶/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DFC15", "name": "泰神奇甜辣醬", "inner_qty": "0", "unit": "瓶", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DFC16", "name": "紅麴養生醬", "inner_qty": "4", "unit": "桶/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DGA01", "name": "乳瑪琳(遠東)", "inner_qty": "6", "unit": "罐/箱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DGA02", "name": "活力鮮特濃無糖鮮奶油", "inner_qty": "10", "unit": "罐/箱", "count_qty": "0", "factory_qty": 0, "remark": null}, {"code": "DHA01", "name": "紅棗", "inner_qty": "1", "unit": "斤/包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DHA02", "name": "黑棗", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DHA03", "name": "桂枝", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DHA04", "name": "枸杞", "inner_qty": "1", "unit": "斤/包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DHA08", "name": "肉桂粉(油桂粉)", "inner_qty": "1", "unit": "斤", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DHA09", "name": "白荳蔻粉", "inner_qty": "1", "unit": "罐", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DHA09-1", "name": "白荳蔻粉", "inner_qty": "1", "unit": "罐", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DHA10", "name": "肉桂片", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DHA11", "name": "甘草片", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DHA12", "name": "當歸片", "inner_qty": "1", "unit": "斤/包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DHA13", "name": "黨參片", "inner_qty": "1", "unit": "斤/包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "DHA14", "name": "熟地片", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DHA15", "name": "川芎片", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DHA16", "name": "黃耆片", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DHA17", "name": "杜仲片", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DHA18", "name": "北蟲草", "inner_qty": "0", "unit": "斤", "count_qty": "0", "factory_qty": 0, "remark": "通常為零庫存"}, {"code": "DWA01", "name": "麵寶NT-G(乳化油)", "inner_qty": "1", "unit": "桶/箱", "count_qty": null, "factory_qty": 0, "remark": null}], "E": [{"code": "EAA01", "name": "封口盒-餛飩", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EAA02", "name": "封口盒-三角圓", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EAB01", "name": "餛飩3H盒(白)", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EBA01", "name": "無標袋22*26cm", "inner_qty": null, "unit": "公斤", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EBA01-1", "name": "無標袋-真空22cm*32cm", "inner_qty": null, "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EBA01-2", "name": "無標袋-素粽", "inner_qty": null, "unit": "公斤", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EBA01-3", "name": "無標袋-真空(年菜)20cm*27cm", "inner_qty": null, "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EBA01-4", "name": "無標袋-真空(鍋貼)", "inner_qty": null, "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EBA02", "name": "無標袋-真空(年菜)17cm*27cm", "inner_qty": null, "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EBA03", "name": "無標袋-真空(蒸雞腿鋪底用)30cm*40cm", "inner_qty": null, "unit": "包", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EBB01", "name": "PE透明平口袋-素螺", "inner_qty": null, "unit": "公斤", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EBC01", "name": "有標袋-慈芯水餃", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EBC02", "name": "有標袋-慈芯餛飩", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EBC03", "name": "有標袋-慈芯三角圓", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EBC11", "name": "有標袋-栗粒粽20入真空包裝袋", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EBC12", "name": "有標袋-栗粒粽10入手提立體袋", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EBC21", "name": "有標袋-卡脆G腿包裝袋", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EBD01", "name": "通用袋-得來素", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EBE01", "name": "PE袋 1氣孔", "inner_qty": null, "unit": "公斤", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "ECA01", "name": "封口膜-慈芯三角圓", "inner_qty": null, "unit": "捲", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "ECA02", "name": "封口膜-得來素餛飩", "inner_qty": null, "unit": "捲", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "ECA03", "name": "封口膜-貞恩餛飩", "inner_qty": null, "unit": "捲", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "ECB01", "name": "胡椒鹽封膜(鋁膜)", "inner_qty": null, "unit": "捲", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EDA01", "name": "HD單張膜(26cm*捲*0.025)", "inner_qty": null, "unit": "公斤", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EDA02", "name": "HD單張(26cm*26cm*0.03)", "inner_qty": null, "unit": "公斤", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EDA03", "name": "單片塑膠膜19cm*0.025mm*24cm", "inner_qty": null, "unit": "公斤", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EEA01", "name": "空白紙箱(2才)", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EEA02", "name": "空白紙箱(家樂福)", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EEA03", "name": "水果紙箱(2才)", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EEB01", "name": "DLS紙箱(尺寸90)", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EEB02", "name": "DLS紙箱(尺寸60)", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EEB03", "name": "DLS紙箱(團購)", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EEB04", "name": "DLS紙箱(尺寸90加厚版)", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EEB05", "name": "DLS紙箱(尺寸93加厚版)", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EFA01", "name": "禮盒-栗粒粽10入", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EFA02", "name": "禮盒-卡脆G腿", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EFA03", "name": "禮盒-端午粽神組", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EGA01", "name": "DLS提袋-橘版", "inner_qty": null, "unit": "個", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EZA01", "name": "粽葉", "inner_qty": "50", "unit": "斤/梱", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EZA02", "name": "粽串(20入/串)", "inner_qty": "2000", "unit": "串/袋", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EZA03", "name": "粽串(10入/串)", "inner_qty": "4000", "unit": "串/袋", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "EZA04", "name": "荷葉", "inner_qty": "1", "unit": "斤", "count_qty": null, "factory_qty": 0, "remark": null}], "F": [{"code": "FAA01", "name": "PVC無粉手套-S", "inner_qty": null, "unit": "盒", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "FAA02", "name": "PVC無粉手套-M", "inner_qty": null, "unit": "盒", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "FAA03", "name": "PVC無粉手套-L", "inner_qty": null, "unit": "盒", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "FAA11", "name": "NBR食品級人造膠手套-S", "inner_qty": null, "unit": "盒", "count_qty": null, "factory_qty": 0, "remark": null}, {"code": "FAA12", "name": "NBR食品級人造膠手套-M", "inner_qty": null, "unit": "盒", "count_qty": null, "factory_qty": 0, "remark": null}]};
+const GROUP_LABELS = {"D": "D 類", "E": "E 類", "F": "F 類"};
+const ZERO_REMARK = "通常為零庫存";
+
+let currentGroup = Object.keys(DATA)[0];
+let searchTerm = "";
+
+const tabsEl = document.getElementById('tabs');
+const tbodyEl = document.getElementById('tableBody');
+const searchBox = document.getElementById('searchBox');
+const statusMsg = document.getElementById('statusMsg');
+
+const hintPopup = document.getElementById('hintPopup');
+const homeScreen = document.getElementById('homeScreen');
+const countScreen = document.getElementById('countScreen');
+const homeStatusMsg = document.getElementById('homeStatusMsg');
+
+const BACKUP_KEY = 'inventory_count_backup_v1';
+
+function showHomeStatus(text) {
+  homeStatusMsg.textContent = text;
+  setTimeout(() => { if (homeStatusMsg.textContent === text) homeStatusMsg.textContent = ""; }, 2200);
+}
+
+// ① 進入盤點程序
+document.getElementById('menuEnter').addEventListener('click', () => {
+  homeScreen.style.display = 'none';
+  countScreen.style.display = 'block';
+  renderTabs();
+  renderTable();
+});
+document.getElementById('backBtn').addEventListener('click', () => {
+  countScreen.style.display = 'none';
+  homeScreen.style.display = 'block';
+  hideHint();
+});
+
+// ---- 內建 XLSX 產生器（不依賴外部 CDN，離線也能使用）----
+function crc32(buf) {
+  const table = crc32.table || (crc32.table = (() => {
+    const t = [];
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c;
+    }
+    return t;
+  })());
+  let crc = 0 ^ (-1);
+  for (let i = 0; i < buf.length; i++) crc = (crc >>> 8) ^ table[(crc ^ buf[i]) & 0xFF];
+  return (crc ^ (-1)) >>> 0;
+}
+
+function makeZip(files) {
+  const localParts = [], centralParts = [];
+  let offset = 0;
+  files.forEach(f => {
+    const nameBytes = f.nameBytes, data = f.data, crc = crc32(data);
+    const localHeader = new Uint8Array(30 + nameBytes.length);
+    const dv = new DataView(localHeader.buffer);
+    dv.setUint32(0, 0x04034b50, true); dv.setUint16(4, 20, true); dv.setUint16(6, 0, true);
+    dv.setUint16(8, 0, true); dv.setUint16(10, 0, true); dv.setUint16(12, 0, true);
+    dv.setUint32(14, crc, true); dv.setUint32(18, data.length, true); dv.setUint32(22, data.length, true);
+    dv.setUint16(26, nameBytes.length, true); dv.setUint16(28, 0, true);
+    localHeader.set(nameBytes, 30);
+    localParts.push(localHeader, data);
+
+    const centralHeader = new Uint8Array(46 + nameBytes.length);
+    const cdv = new DataView(centralHeader.buffer);
+    cdv.setUint32(0, 0x02014b50, true); cdv.setUint16(4, 20, true); cdv.setUint16(6, 20, true);
+    cdv.setUint16(8, 0, true); cdv.setUint16(10, 0, true); cdv.setUint16(12, 0, true); cdv.setUint16(14, 0, true);
+    cdv.setUint32(16, crc, true); cdv.setUint32(20, data.length, true); cdv.setUint32(24, data.length, true);
+    cdv.setUint16(28, nameBytes.length, true); cdv.setUint16(30, 0, true); cdv.setUint16(32, 0, true);
+    cdv.setUint16(34, 0, true); cdv.setUint16(36, 0, true); cdv.setUint32(38, 0, true); cdv.setUint32(42, offset, true);
+    centralHeader.set(nameBytes, 46);
+    centralParts.push(centralHeader);
+    offset += localHeader.length + data.length;
+  });
+
+  const centralOffset = offset;
+  let centralSize = 0;
+  centralParts.forEach(p => centralSize += p.length);
+
+  const eocd = new Uint8Array(22);
+  const edv = new DataView(eocd.buffer);
+  edv.setUint32(0, 0x06054b50, true); edv.setUint16(4, 0, true); edv.setUint16(6, 0, true);
+  edv.setUint16(8, files.length, true); edv.setUint16(10, files.length, true);
+  edv.setUint32(12, centralSize, true); edv.setUint32(16, centralOffset, true); edv.setUint16(20, 0, true);
+
+  const allParts = [...localParts, ...centralParts, eocd];
+  let totalLen = 0;
+  allParts.forEach(p => totalLen += p.length);
+  const result = new Uint8Array(totalLen);
+  let pos = 0;
+  allParts.forEach(p => { result.set(p, pos); pos += p.length; });
+  return result;
+}
+
+function escapeXml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+function sheetXml(rows, colWidths) {
+  let xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+  xml += '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+  if (colWidths && colWidths.length) {
+    xml += '<cols>' + colWidths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('') + '</cols>';
+  }
+  xml += '<sheetData>';
+  rows.forEach((row, i) => {
+    const r = i + 1;
+    xml += `<row r="${r}">`;
+    row.forEach((val, ci) => {
+      const colLetter = String.fromCharCode(65 + ci);
+      const cellRef = colLetter + r;
+      if (typeof val === 'number') {
+        xml += `<c r="${cellRef}"><v>${val}</v></c>`;
+      } else {
+        xml += `<c r="${cellRef}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(val)}</t></is></c>`;
+      }
+    });
+    xml += '</row>';
+  });
+  xml += '</sheetData></worksheet>';
+  return xml;
+}
+
+function buildInventoryXlsx(dataByGroup) {
+  const encoder = new TextEncoder();
+  const SHEET_NAME = '庫存盤點';
+
+  const contentTypesXml = [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
+    '<Default Extension="xml" ContentType="application/xml"/>',
+    '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>',
+    '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>',
+    '</Types>'
+  ].join('');
+
+  const relsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+    '</Relationships>';
+
+  const workbookXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+    `<sheets><sheet name="${escapeXml(SHEET_NAME)}" sheetId="1" r:id="rId1"/></sheets></workbook>`;
+
+  const workbookRelsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
+    '</Relationships>';
+
+  // 所有分類（D / E / F …）依序合併到同一張工作表，只保留「貨品名稱」「廠內庫存」兩欄
+  const rows = [['貨品名稱', '廠內庫存']];
+  Object.keys(dataByGroup).forEach(k => {
+    (dataByGroup[k] || []).forEach(r => {
+      rows.push([r.name || '', (r.factory_qty === null || r.factory_qty === undefined) ? '' : r.factory_qty]);
+    });
+  });
+
+  const files = [];
+  const addFile = (name, xmlStr) => files.push({ nameBytes: encoder.encode(name), data: encoder.encode(xmlStr) });
+  addFile('[Content_Types].xml', contentTypesXml);
+  addFile('_rels/.rels', relsXml);
+  addFile('xl/workbook.xml', workbookXml);
+  addFile('xl/_rels/workbook.xml.rels', workbookRelsXml);
+  addFile('xl/worksheets/sheet1.xml', sheetXml(rows, [42, 14]));
+
+  return makeZip(files);
+}
+
+// ② 盤點匯出 Excel（僅含貨品名稱及廠內庫存，所有分類合併成單一工作表）
+document.getElementById('menuExport').addEventListener('click', () => {
+  try {
+    const bytes = buildInventoryXlsx(DATA);
+    const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const today = new Date();
+    const stamp = today.getFullYear() + String(today.getMonth() + 1).padStart(2, '0') + String(today.getDate()).padStart(2, '0');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `庫存盤點_廠內庫存_${stamp}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showHomeStatus('已匯出 Excel 檔案');
+  } catch (err) {
+    console.error(err);
+    alert('匯出 Excel 時發生錯誤：' + err.message);
+  }
+});
+
+// ③ 盤點數值備份（將目前所有分頁的盤點數量，以貨品編號為 key 存進瀏覽器）
+document.getElementById('menuBackup').addEventListener('click', () => {
+  const values = {};
+  let count = 0;
+  Object.keys(DATA).forEach(key => {
+    DATA[key].forEach(row => {
+      if (row.code) {
+        values[row.code] = row.count_qty;
+        count++;
+      }
+    });
+  });
+  const payload = { time: new Date().toISOString(), values };
+  try {
+    localStorage.setItem(BACKUP_KEY, JSON.stringify(payload));
+    const t = new Date(payload.time);
+    const timeStr = t.getFullYear() + '/' + String(t.getMonth() + 1).padStart(2, '0') + '/' + String(t.getDate()).padStart(2, '0') + ' ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
+    showHomeStatus(`已備份 ${count} 筆盤點數量（${timeStr}）`);
+  } catch (err) {
+    console.error(err);
+    alert('備份失敗：' + err.message);
+  }
+});
+
+// ④ 盤點數值恢復（從瀏覽器讀回上次備份，覆蓋目前的盤點數量）
+document.getElementById('menuRestore').addEventListener('click', () => {
+  let payload;
+  try {
+    const raw = localStorage.getItem(BACKUP_KEY);
+    if (!raw) {
+      alert('目前沒有找到任何備份資料。');
+      return;
+    }
+    payload = JSON.parse(raw);
+  } catch (err) {
+    alert('讀取備份資料失敗。');
+    return;
+  }
+  const t = new Date(payload.time);
+  const timeStr = t.getFullYear() + '/' + String(t.getMonth() + 1).padStart(2, '0') + '/' + String(t.getDate()).padStart(2, '0') + ' ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
+  const ok = confirm(`是否要以 ${timeStr} 的備份，覆蓋目前的盤點數量？`);
+  if (!ok) return;
+
+  let restored = 0;
+  Object.keys(DATA).forEach(key => {
+    DATA[key].forEach(row => {
+      if (row.code && Object.prototype.hasOwnProperty.call(payload.values, row.code)) {
+        row.count_qty = payload.values[row.code];
+        restored++;
+      }
+    });
+  });
+  showHomeStatus(`已恢復 ${restored} 筆盤點數量（來源：${timeStr}）`);
+  if (countScreen.style.display !== 'none') {
+    renderTable();
+  }
+});
+
+// 依據「單位(基)」欄位算出盤點提示：若含有 "/"，取最後一個 "/" 後面的文字；否則取整個單位文字
+function getCountHint(unit) {
+  if (!unit) return "";
+  const s = String(unit).trim();
+  if (s === "") return "";
+  let effective = s;
+  if (s.includes('/')) {
+    const parts = s.split('/');
+    effective = parts[parts.length - 1].trim();
+  }
+  if (effective === "") return "";
+  return "以" + effective + "盤點";
+}
+
+function renderTabs() {
+  tabsEl.innerHTML = "";
+  Object.keys(DATA).forEach(key => {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (key === currentGroup ? ' active' : '');
+    const label = GROUP_LABELS[key] || (key + " 類");
+    btn.innerHTML = label + '<span class="count-badge">' + DATA[key].length + '</span>';
+    btn.addEventListener('click', () => {
+      currentGroup = key;
+      renderTabs();
+      renderTable();
+      hideHint();
+    });
+    tabsEl.appendChild(btn);
+  });
+}
+
+function showStatus(text) {
+  statusMsg.textContent = text;
+  setTimeout(() => { if (statusMsg.textContent === text) statusMsg.textContent = ""; }, 1500);
+}
+
+function hideHint() {
+  hintPopup.classList.remove('show');
+}
+
+function showHintNear(el, text) {
+  if (!text) return;
+  hintPopup.textContent = text;
+  hintPopup.classList.add('show');
+  const rect = el.getBoundingClientRect();
+  const popupWidth = hintPopup.offsetWidth;
+  let left = rect.left;
+  const maxLeft = window.innerWidth - popupWidth - 8;
+  if (left > maxLeft) left = Math.max(8, maxLeft);
+  hintPopup.style.left = left + 'px';
+  hintPopup.style.top = (rect.bottom + 8) + 'px';
+}
+
+function makeCell(value, editable, className) {
+  const td = document.createElement('td');
+  if (className) td.className = className;
+  td.textContent = (value === null || value === undefined) ? "" : value;
+  if (editable) td.setAttribute('contenteditable', 'true');
+  return td;
+}
+
+function renderTable() {
+  tbodyEl.innerHTML = "";
+  const rows = DATA[currentGroup] || [];
+  const term = searchTerm.trim().toLowerCase();
+
+  rows.forEach((row) => {
+    if (term) {
+      const hay = ((row.name || "") + " " + (row.code || "")).toLowerCase();
+      if (!hay.includes(term)) return;
+    }
+
+    const tr = document.createElement('tr');
+
+    // 貨品名稱欄（含盤點單位提示圖示）
+    const tdName = document.createElement('td');
+    const wrap = document.createElement('div');
+    wrap.className = 'name-cell';
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'name-text';
+    nameSpan.setAttribute('contenteditable', 'true');
+    nameSpan.textContent = row.name || "";
+    nameSpan.addEventListener('input', () => { row.name = nameSpan.textContent; });
+
+    const hintIcon = document.createElement('span');
+    hintIcon.className = 'hint-icon';
+    hintIcon.textContent = 'i';
+    hintIcon.title = '查看盤點單位提示';
+    hintIcon.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const hint = getCountHint(row.unit);
+      if (hintPopup.classList.contains('show') && hintPopup.textContent === hint) {
+        hideHint();
+      } else {
+        showHintNear(hintIcon, hint || '無盤點單位資訊');
+      }
+    });
+
+    wrap.appendChild(nameSpan);
+    wrap.appendChild(hintIcon);
+    tdName.appendChild(wrap);
+
+    // 盤點數量欄
+    const tdCount = makeCell(row.count_qty, true);
+    tdCount.addEventListener('input', () => { row.count_qty = tdCount.textContent; });
+
+    tr.appendChild(tdName);
+    tr.appendChild(tdCount);
+
+    const tdDel = document.createElement('td');
+    const delBtn = document.createElement('button');
+    delBtn.className = 'del-btn';
+    delBtn.textContent = '✕';
+    delBtn.title = '刪除此列';
+    delBtn.addEventListener('click', () => {
+      const realIdx = DATA[currentGroup].indexOf(row);
+      if (realIdx > -1) DATA[currentGroup].splice(realIdx, 1);
+      renderTabs();
+      renderTable();
+      showStatus('已刪除一列');
+    });
+    tdDel.appendChild(delBtn);
+    tr.appendChild(tdDel);
+
+    tbodyEl.appendChild(tr);
+  });
+
+  if (rows.length === 0 || tbodyEl.children.length === 0) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 3;
+    td.style.textAlign = 'center';
+    td.style.color = 'var(--text-muted)';
+    td.style.padding = '24px';
+    td.textContent = '沒有符合的資料';
+    tr.appendChild(td);
+    tbodyEl.appendChild(tr);
+  }
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.hint-icon')) hideHint();
+});
+window.addEventListener('scroll', hideHint, true);
+
+document.getElementById('addRowBtn').addEventListener('click', () => {
+  const newRow = { code: '', name: '', inner_qty: '', unit: '', count_qty: '', factory_qty: '', remark: '' };
+  DATA[currentGroup].push(newRow);
+  renderTabs();
+  renderTable();
+  showStatus('已新增一列');
+});
+
+searchBox.addEventListener('input', (e) => {
+  searchTerm = e.target.value;
+  renderTable();
+});
+
+renderTabs();
+renderTable();
+</script>
+</body>
+</html>
