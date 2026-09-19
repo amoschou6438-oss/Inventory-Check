@@ -812,6 +812,21 @@ function sheetXml(rows, colWidths) {
   return xml;
 }
 
+// 取得匯出用的「廠內庫存」：以畫面上輸入的「盤點數量」為準；尚未輸入時才沿用原本的 factory_qty
+function exportQty(r) {
+  let v = r.count_qty;
+  if (v === null || v === undefined || String(v).trim() === '') v = r.factory_qty;
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'number') return v;
+  // 全形數字／符號轉半形、去除空白與千分位逗號，能轉成數字就以數字寫入（才能套用紅色字體）
+  const t = String(v)
+    .replace(/[\uFF01-\uFF5E]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/[\s,]/g, '');
+  if (t === '') return '';
+  const n = Number(t);
+  return Number.isFinite(n) ? n : String(v).trim();
+}
+
 function buildInventoryXlsx(dataByGroup) {
   const encoder = new TextEncoder();
   const SHEET_NAME = '庫存盤點';
@@ -863,7 +878,7 @@ function buildInventoryXlsx(dataByGroup) {
   const rows = [['貨品名稱', '廠內庫存']];
   Object.keys(dataByGroup).forEach(k => {
     (dataByGroup[k] || []).forEach(r => {
-      rows.push([r.name || '', (r.factory_qty === null || r.factory_qty === undefined) ? '' : r.factory_qty]);
+      rows.push([r.name || '', exportQty(r)]);
     });
   });
 
