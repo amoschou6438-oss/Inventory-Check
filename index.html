@@ -198,27 +198,59 @@
     border-color: var(--accent);
     color: var(--accent);
   }
-  .float-home-btn {
+  /* 右下角浮動選單：收合時只顯示 📂；按下變 📁，🔝／🏠 由下往上滑出 */
+  .float-menu {
+    --fm-right: 18px;
+    --fm-bottom: 18px;
+    --fm-size: 56px;
+    --fm-gap: 68px;
+  }
+  .float-menu-btn,
+  .float-home-btn,
+  .float-top-btn {
     position: fixed;
-    right: 18px;
-    bottom: 18px;
-    z-index: 50;
-    width: 56px;
-    height: 56px;
-    min-height: 56px;
+    right: var(--fm-right);
+    width: var(--fm-size);
+    height: var(--fm-size);
+    min-height: var(--fm-size);
     border-radius: 50%;
     padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #1c2340;
+    background: #ffffff;
     border: 3px solid #d4af5a;
-    color: #ffffff;
+    color: #1c2340;
     font-size: 1.6rem;
     line-height: 1;
     box-shadow: 0 4px 14px rgba(0,0,0,0.28);
   }
-  .float-home-btn:hover { background: #232b4d; }
+  .float-menu-btn { bottom: var(--fm-bottom); z-index: 51; }
+  .float-home-btn { bottom: calc(var(--fm-bottom) + var(--fm-gap)); z-index: 50; }
+  .float-top-btn  { bottom: calc(var(--fm-bottom) + var(--fm-gap) * 2); z-index: 50; }
+  .float-home-btn,
+  .float-top-btn {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform .25s ease, opacity .2s ease, visibility 0s linear .25s;
+  }
+  .float-home-btn { transform: translateY(var(--fm-gap)) scale(.6); }
+  .float-top-btn  { transform: translateY(calc(var(--fm-gap) * 2)) scale(.6); }
+  .float-menu.open .float-home-btn,
+  .float-menu.open .float-top-btn {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+    transition: transform .25s ease, opacity .2s ease, visibility 0s;
+  }
+  .float-menu-btn:hover,
+  .float-home-btn:hover,
+  .float-top-btn:hover { background: #f3f3f3; }
+  .float-menu-btn:active,
+  .float-menu.open .float-home-btn:active,
+  .float-menu.open .float-top-btn:active { transform: scale(0.94); }
   .zero-toggle-bar { margin: 0 0 10px 0; display: flex; justify-content: center; }
   .zero-pill {
     display: inline-flex;
@@ -280,31 +312,9 @@
     touch-action: manipulation;
   }
   .next-btn:active { transform: scale(0.95); }
-  .float-top-btn {
-    position: fixed;
-    right: 18px;
-    bottom: 86px;
-    z-index: 50;
-    width: 56px;
-    height: 56px;
-    min-height: 56px;
-    border-radius: 50%;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #1c2340;
-    border: 3px solid #d4af5a;
-    color: #ffffff;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.28);
-  }
-  .float-top-btn svg { width: 26px; height: 26px; }
-  .float-top-btn:hover { background: #232b4d; }
-  .float-top-btn:active { transform: scale(0.94); }
-  .float-home-btn:active { transform: scale(0.94); }
   @media (max-width: 640px) {
-    .float-home-btn { right: 14px; bottom: 14px; width: 52px; height: 52px; min-height: 52px; font-size: 1.45rem; }
-    .float-top-btn { right: 14px; bottom: 76px; width: 52px; height: 52px; min-height: 52px; }
+    .float-menu { --fm-right: 14px; --fm-bottom: 14px; --fm-size: 52px; --fm-gap: 62px; }
+    .float-menu-btn, .float-home-btn, .float-top-btn { font-size: 1.45rem; }
   }
   .card {
     background: var(--card-bg);
@@ -724,8 +734,11 @@
   <div class="tabs" id="tabs"></div>
   <div class="subtabs" id="subtabs"></div>
 
-  <button id="floatHomeBtn" class="float-home-btn" title="回到主畫面" aria-label="回到主畫面">🏠</button>
-  <button id="floatTopBtn" class="float-top-btn" title="回到最上面" aria-label="回到最上面"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14"/><path d="M12 20V9"/><path d="M6 14l6-6 6 6"/></svg></button>
+  <div id="floatMenu" class="float-menu">
+    <button id="floatHomeBtn" class="float-home-btn" type="button" title="回到主畫面" aria-label="回到主畫面">🏠</button>
+    <button id="floatTopBtn" class="float-top-btn" type="button" title="回到最上面" aria-label="回到最上面">🔝</button>
+    <button id="floatMenuBtn" class="float-menu-btn" type="button" title="展開選單" aria-label="展開選單" aria-expanded="false">📂</button>
+  </div>
   <div id="nextBar" class="next-bar"><button id="nextBtn" class="next-btn" type="button">下一項 ›</button></div>
 
   <div id="zeroToggleBar" class="zero-toggle-bar" style="display:none;">
@@ -834,7 +847,20 @@ document.getElementById('menuEnter').addEventListener('click', () => {
   renderTable();
   focusOrSkip();
 });
+// ---- 右下角浮動選單：📂 展開（變 📁）／📁 收起 ----
+const floatMenu = document.getElementById('floatMenu');
+const floatMenuBtn = document.getElementById('floatMenuBtn');
+function setFloatMenu(open) {
+  floatMenu.classList.toggle('open', open);
+  floatMenuBtn.textContent = open ? '📁' : '📂';
+  floatMenuBtn.title = open ? '收起選單' : '展開選單';
+  floatMenuBtn.setAttribute('aria-label', floatMenuBtn.title);
+  floatMenuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+floatMenuBtn.addEventListener('click', () => setFloatMenu(!floatMenu.classList.contains('open')));
+
 function goHome() {
+  setFloatMenu(false);
   nextBar.style.display = 'none';
   nextBarShown = false;
   countScreen.style.display = 'none';
@@ -1821,7 +1847,7 @@ function renderTable() {
     // 按手機鍵盤上方的 ✓（完成）會直接收起鍵盤：有輸入過數值且不是點到其他輸入格 → 視同輸入完成
     tdCount.addEventListener('blur', (e) => {
       if (tdCount.dataset.dirty !== '1') return;
-      if (e.relatedTarget && (e.relatedTarget.isContentEditable || e.relatedTarget.closest('.float-top-btn, .zero-toggle-btn'))) return;   // 只是換去別的欄位／點回到最上面
+      if (e.relatedTarget && (e.relatedTarget.isContentEditable || e.relatedTarget.closest('.float-menu-btn, .float-top-btn, .zero-toggle-btn'))) return;   // 只是換去別的欄位／點回到最上面
       if (!tr.isConnected || tdCount.textContent.trim() === '') return;
       completeCell();
       reviveKeyboard();   // 按 ✓ 收起鍵盤後，讓下一格的游標與鍵盤直接出現
