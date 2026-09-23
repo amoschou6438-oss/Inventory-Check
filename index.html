@@ -198,18 +198,26 @@
     border-color: var(--accent);
     color: var(--accent);
   }
-  /* 右下角浮動選單：收合時只顯示 📂；按下變 📁，🔝／🏠 由下往上滑出 */
+  /* 右下角浮動選單：收合時只顯示 📂；按下變 📁，🔝／🏠 由下往上滑出。
+     可按住 📂 拖曳到任何位置（位置會記住）；靠上時往下展開；靠左時標籤放右側 */
   .float-menu {
     --fm-right: 18px;
     --fm-bottom: 18px;
     --fm-size: 56px;
     --fm-gap: 68px;
+    position: fixed;
+    right: var(--fm-right);
+    bottom: var(--fm-bottom);
+    width: var(--fm-size);
+    height: var(--fm-size);
+    z-index: 51;
   }
   .float-menu-btn,
   .float-home-btn,
   .float-top-btn {
-    position: fixed;
-    right: var(--fm-right);
+    position: absolute;
+    right: 0;
+    bottom: 0;
     width: var(--fm-size);
     height: var(--fm-size);
     min-height: var(--fm-size);
@@ -225,32 +233,41 @@
     line-height: 1;
     box-shadow: 0 4px 14px rgba(0,0,0,0.28);
   }
-  .float-menu-btn { bottom: var(--fm-bottom); z-index: 51; }
-  .float-home-btn { bottom: calc(var(--fm-bottom) + var(--fm-gap)); z-index: 50; }
-  .float-top-btn  { bottom: calc(var(--fm-bottom) + var(--fm-gap) * 2); z-index: 50; }
+  .float-menu-btn { z-index: 2; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; transition: transform .15s ease; }
   .float-home-btn,
   .float-top-btn {
+    z-index: 1;
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
+    transform: scale(.5);
     transition: transform .25s ease, opacity .2s ease, visibility 0s linear .25s;
   }
-  .float-home-btn { transform: translateY(var(--fm-gap)) scale(.6); }
-  .float-top-btn  { transform: translateY(calc(var(--fm-gap) * 2)) scale(.6); }
   .float-menu.open .float-home-btn,
   .float-menu.open .float-top-btn {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
-    transform: none;
     transition: transform .25s ease, opacity .2s ease, visibility 0s;
   }
+  .float-menu.open .float-home-btn { transform: translateY(calc(var(--fm-gap) * -1)); }
+  .float-menu.open .float-top-btn  { transform: translateY(calc(var(--fm-gap) * -2)); }
+  .float-menu.fm-down.open .float-home-btn { transform: translateY(var(--fm-gap)); }
+  .float-menu.fm-down.open .float-top-btn  { transform: translateY(calc(var(--fm-gap) * 2)); }
   .float-menu-btn:hover,
   .float-home-btn:hover,
   .float-top-btn:hover { background: #f3f3f3; }
-  .float-menu-btn:active,
+  .float-menu-btn:active { transform: scale(0.94); }
   .float-menu.open .float-home-btn:active,
-  .float-menu.open .float-top-btn:active { transform: scale(0.94); }
+  .float-menu.open .float-top-btn:active { filter: brightness(0.92); }
+  .float-menu.fm-dragging .float-menu-btn { cursor: grabbing; transition: none; transform: scale(1.1); box-shadow: 0 10px 26px rgba(0,0,0,0.35); }
+  .fm-label {
+    position: absolute; top: 50%; right: calc(100% + 10px); transform: translateY(-50%);
+    background: rgba(28,35,64,0.88); color: #fff; font-size: 0.8rem; font-weight: 700; line-height: 1;
+    padding: 6px 11px; border-radius: 999px; white-space: nowrap; pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  }
+  .float-menu.fm-label-right .fm-label { right: auto; left: calc(100% + 10px); }
   .zero-toggle-bar { margin: 0 0 10px 0; display: flex; justify-content: center; }
   .zero-pill {
     display: inline-flex;
@@ -735,9 +752,9 @@
   <div class="subtabs" id="subtabs"></div>
 
   <div id="floatMenu" class="float-menu">
-    <button id="floatHomeBtn" class="float-home-btn" type="button" title="回到主畫面" aria-label="回到主畫面">🏠</button>
-    <button id="floatTopBtn" class="float-top-btn" type="button" title="回到最上面" aria-label="回到最上面">🔝</button>
-    <button id="floatMenuBtn" class="float-menu-btn" type="button" title="展開選單" aria-label="展開選單" aria-expanded="false">📂</button>
+    <button id="floatHomeBtn" class="float-home-btn" type="button" title="回到主畫面" aria-label="回到主畫面">🏠<span class="fm-label">主畫面</span></button>
+    <button id="floatTopBtn" class="float-top-btn" type="button" title="回到最上面" aria-label="回到最上面">🔝<span class="fm-label">到頂端</span></button>
+    <button id="floatMenuBtn" class="float-menu-btn" type="button" title="展開選單（可按住拖曳移動）" aria-label="展開選單" aria-expanded="false">📂</button>
   </div>
   <div id="nextBar" class="next-bar"><button id="nextBtn" class="next-btn" type="button">下一項 ›</button></div>
 
@@ -853,11 +870,103 @@ const floatMenuBtn = document.getElementById('floatMenuBtn');
 function setFloatMenu(open) {
   floatMenu.classList.toggle('open', open);
   floatMenuBtn.textContent = open ? '📁' : '📂';
-  floatMenuBtn.title = open ? '收起選單' : '展開選單';
-  floatMenuBtn.setAttribute('aria-label', floatMenuBtn.title);
+  floatMenuBtn.title = open ? '收起選單' : '展開選單（可按住拖曳移動）';
+  floatMenuBtn.setAttribute('aria-label', open ? '收起選單' : '展開選單');
   floatMenuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 floatMenuBtn.addEventListener('click', () => setFloatMenu(!floatMenu.classList.contains('open')));
+
+// ── 選單可自由拖曳：按住 📂 拖曳即可移到畫面任何位置，放開後會記住位置 ──
+// 靠近上方時往下展開；靠近左邊時標籤改放右側
+function initDraggableMenu(cfg) {
+  const menu = cfg.menu, main = cfg.main;
+  if (!menu || !main) return;
+  const M = 8, DRAG_PX = 6;
+  const vw = () => document.documentElement.clientWidth || window.innerWidth;
+  const vh = () => document.documentElement.clientHeight || window.innerHeight;
+  const size = () => menu.offsetWidth || cfg.size;
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), Math.max(lo, hi));
+  const limits = () => ({ minX: M, minY: M, maxX: vw() - size() - M, maxY: vh() - size() - M });
+  let saved = null, drag = null, justDragged = false;
+  try { saved = JSON.parse(localStorage.getItem(cfg.key) || 'null'); } catch (e) {}
+  if (saved && !(isFinite(saved.x) && isFinite(saved.y))) saved = null;
+
+  function place(left, top) {
+    const L = limits();
+    menu.style.right = 'auto'; menu.style.bottom = 'auto';
+    menu.style.left = clamp(left, L.minX, L.maxX) + 'px';
+    menu.style.top  = clamp(top,  L.minY, L.maxY) + 'px';
+  }
+  function applySaved() {
+    if (!saved) return;
+    const L = limits();
+    place(L.minX + clamp(saved.x, 0, 1) * (L.maxX - L.minX),
+          L.minY + clamp(saved.y, 0, 1) * (L.maxY - L.minY));
+  }
+  function save() {
+    const r = menu.getBoundingClientRect(), L = limits();
+    saved = {
+      x: L.maxX > L.minX ? (r.left - L.minX) / (L.maxX - L.minX) : 0,
+      y: L.maxY > L.minY ? (r.top  - L.minY) / (L.maxY - L.minY) : 0
+    };
+    try { localStorage.setItem(cfg.key, JSON.stringify(saved)); } catch (e) {}
+  }
+  // 依目前位置決定：往上／往下展開、標籤放左／放右
+  function updateLayout() {
+    const r = menu.getBoundingClientRect();
+    if (!r.width) return;
+    const need = cfg.items * (r.width + 10) + M;
+    const above = r.top, below = vh() - r.bottom;
+    menu.classList.toggle('fm-down', above < need && below > above);
+    const leftRoom = r.left, rightRoom = vw() - r.right;
+    menu.classList.toggle('fm-label-right', leftRoom < 112 && rightRoom > leftRoom);
+  }
+
+  main.addEventListener('pointerdown', e => {
+    if (e.button !== undefined && e.button !== 0) return;
+    const r = menu.getBoundingClientRect();
+    drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, ox: r.left, oy: r.top, moved: false };
+    try { main.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  main.addEventListener('pointermove', e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+    if (!drag.moved) {
+      if (Math.hypot(dx, dy) < DRAG_PX) return;
+      drag.moved = true;
+      menu.classList.add('fm-dragging');
+      cfg.close();
+    }
+    place(drag.ox + dx, drag.oy + dy);
+    e.preventDefault();
+  });
+  function endDrag(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    const moved = drag.moved;
+    drag = null;
+    menu.classList.remove('fm-dragging');
+    if (moved) {
+      save(); updateLayout();
+      justDragged = true;
+      setTimeout(() => { justDragged = false; }, 80);
+    }
+  }
+  main.addEventListener('pointerup', endDrag);
+  main.addEventListener('pointercancel', endDrag);
+  // 拖曳結束時不要當成「點一下」；正常點擊則在展開前先算好方向
+  menu.addEventListener('click', e => {
+    if (justDragged) { e.stopPropagation(); e.preventDefault(); return; }
+    if (main.contains(e.target)) updateLayout();
+  }, true);
+  window.addEventListener('resize', () => { applySaved(); updateLayout(); });
+  applySaved();
+  updateLayout();
+}
+function __startDraggableMenu(cfg) {
+  const go = () => initDraggableMenu(cfg);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+}
+__startDraggableMenu({ menu: document.getElementById('floatMenu'), main: document.getElementById('floatMenuBtn'), key: 'fabPos_庫存盤點', close: () => setFloatMenu(false), size: 56, items: 2 });
 
 function goHome() {
   setFloatMenu(false);
