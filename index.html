@@ -1158,6 +1158,12 @@ let storageOk = true;
 // 舊資料轉換（可重複執行）：麵寶乳化油改以桶計；原味猴頭菇改為「3斤／5斤包數」分開輸入、盤點數量＝總斤數
 function applyItemPatches() {
   Object.keys(DATA).forEach(k => (DATA[k] || []).forEach(r => {
+    if (r.code === 'DFB05' && String(r.unit || '').trim() === '桶') r.unit = '箱';   // 仲味麻油3L：以箱盤點（1箱6罐，內包裝數量6）
+    if (/PVC無粉手套|NBR食品級人造膠手套|^麻辣醬/i.test(String(r.name || '').trim()) && r.box === undefined && r.loose === undefined) {
+      // 舊資料原本盤點的是「盒／包」：整數放進零散，總數不變
+      const old = String(r.count_qty === null || r.count_qty === undefined ? '' : r.count_qty).trim();
+      if (old !== '' && isFinite(Number(old))) r.loose = old;
+    }
     if (r.code === 'DWA01' && String(r.unit || '').trim() === '桶/箱') r.unit = '桶';
     if (r.code === 'DCA38' && String(r.unit || '').trim() === '斤/包') {
       const old = String(r.count_qty === null || r.count_qty === undefined ? '' : r.count_qty).trim();
@@ -1933,7 +1939,7 @@ document.getElementById('menuClear').addEventListener('click', () => {
   }
   const ok = confirm(`確定要清除 ${dirty.length} 筆盤點數值嗎？\n\n預設為 0 的品項會維持 0，其餘全部清為空白。\n（如需保留目前進度，請先按「盤點數值備份」）`);
   if (!ok) return;
-  dirty.forEach(row => { row.count_qty = defaultCount(row); delete row.count_formula; delete row.pack3; delete row.pack5; });
+  dirty.forEach(row => { row.count_qty = defaultCount(row); delete row.count_formula; delete row.pack3; delete row.pack5; delete row.box; delete row.loose; });
   showHomeStatus(`已清除 ${dirty.length} 筆盤點數值`);
   if (countScreen.style.display !== 'none') {
     renderTable();
@@ -1948,6 +1954,7 @@ function getNameNote(name) {
   if (/NBR食品級人造膠手套/i.test(n)) return '1箱10盒';
   if (/^紅辣椒粉T[(（]小磨坊[)）]/.test(n)) return '1箱12包';
   if (/^麻辣醬/.test(n)) return '1箱15包';
+  if (/^仲味麻油/.test(n)) return '1箱6罐';
   return '';
 }
 
@@ -2309,6 +2316,33 @@ function evalFormula(expr) {
 }
 
 // ---- 原味猴頭菇(純素)：3斤、5斤各自輸入包數，自動計算總斤數 ----
+// ---- 「箱＋零散」輸入：手套（PVC 1箱20盒、NBR 1箱10盒）與麻辣醬（1箱15包）----
+// 盤點數量＝箱數×每箱入數＋零散數（零散以盒／包計），count_qty 存總數，換算數量即時顯示
+function getCartonCfg(r) {
+  const n = String(r.name || '').trim();
+  let per = 0, unit = '';
+  if (/PVC無粉手套/i.test(n)) { per = 20; unit = '盒'; }
+  else if (/NBR食品級人造膠手套/i.test(n)) { per = 10; unit = '盒'; }
+  else if (/^麻辣醬/.test(n)) { per = 15; unit = '包'; }
+  else return null;
+  const fmt = v => (v === null || v === undefined) ? '' : String(v).trim();
+  const total = row => {
+    const a = toNum(row.box), b = toNum(row.loose);
+    if (a === null && b === null) return '';
+    return String(Math.round(((a || 0) * per + (b || 0)) * 1e6) / 1e6);
+  };
+  const display = row => {
+    const a = toNum(row.box), b = toNum(row.loose);
+    if (a === null && b === null) return '';
+    const parts = [];
+    if (a) parts.push(a + '箱');
+    if (b) parts.push(b + unit);
+    return parts.length ? parts.join('\n') : '0';
+  };
+  return { per, unit, total, display,
+    fields: [['box', '', '箱'], ['loose', '零散', unit]],
+    hint: '箱＋零散' + unit };
+}
 const isMultiRow = r => r.code === 'DCA38' || /^原味猴頭菇[(（]純素[)）]/.test(String(r.name || '').trim());
 function calcMultiTotal(row) {
   // 不換算斤數：只列出 3斤、5斤 的包數（不為 0 才列出），例如「3斤 4包\n5斤 2包」
@@ -2319,14 +2353,14 @@ function calcMultiTotal(row) {
   if (b) parts.push('5斤 ' + b + '包');
   return parts.length ? parts.join('\n') : '0';   // 兩種都是 0
 }
-function buildMultiInputs(row, tr, tdName, tdCount) {
+function buildMultiInputs(row, tr, tdName, tdCount, cfg) {
   tr._multi = true;
   tr._row = row;
   const box = document.createElement('div');
   box.className = 'multi-box';
-  const refresh = () => { tdCount.textContent = calcMultiTotal(row); };
+  const refresh = () => { tdCount.textContent = cfg ? cfg.display(row) : calcMultiTotal(row); };
   const inputs = [];
-  [['pack3', '3斤'], ['pack5', '5斤']].forEach(([key, label], idx) => {
+  (cfg ? cfg.fields : [['pack3', '3斤', '包'], ['pack5', '5斤', '包']]).forEach(([key, label, unitLabel], idx) => {
     const lab = document.createElement('label');
     lab.className = 'multi-item';
     const t = document.createElement('span');
@@ -2338,10 +2372,11 @@ function buildMultiInputs(row, tr, tdName, tdCount) {
     inp.setAttribute('inputmode', 'decimal');
     inp.setAttribute('enterkeyhint', 'next');
     inp.setAttribute('autocomplete', 'off');
-    inp.setAttribute('aria-label', label + '包數');
+    inp.setAttribute('aria-label', (label || unitLabel) + '數');
     const unit = document.createElement('span');
-    unit.textContent = '包';
-    lab.appendChild(t); lab.appendChild(inp); lab.appendChild(unit);
+    unit.textContent = unitLabel;
+    if (label) lab.appendChild(t);
+    lab.appendChild(inp); lab.appendChild(unit);
     box.appendChild(lab);
     inputs.push(inp);
 
@@ -2353,7 +2388,7 @@ function buildMultiInputs(row, tr, tdName, tdCount) {
       if (i >= 0) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, '');
       if (v !== inp.value) inp.value = v;
       row[key] = v;
-      row.count_qty = calcMultiTotal(row);
+      row.count_qty = cfg ? cfg.total(row) : calcMultiTotal(row);
       row._touched = true;
       touchedRows.add(row);
       inp.dataset.dirty = '1';
@@ -2379,7 +2414,7 @@ function buildMultiInputs(row, tr, tdName, tdCount) {
   tr._firstInput = inputs[0];
   tdName.appendChild(box);
   tdCount.classList.add('multi-total');
-  tdCount.title = '3斤、5斤的包數';
+  tdCount.title = cfg ? '箱數＋零散' : '3斤、5斤的包數';
   refresh();
 }
 
@@ -2462,7 +2497,7 @@ function renderTable() {
     hintSlot.className = 'hint-slot';
     const hintChip = document.createElement('span');
     hintChip.className = 'hint-chip';
-    hintChip.textContent = isMultiRow(row) ? '3斤、5斤各輸入包數' : (getCountHint(row.unit) || '無盤點單位資訊');   // 文字先填好，展開時寬度不會跳動
+    hintChip.textContent = isMultiRow(row) ? '3斤、5斤各輸入包數' : getCartonCfg(row) ? getCartonCfg(row).hint : (getCountHint(row.unit) || '無盤點單位資訊');   // 文字先填好，展開時寬度不會跳動
     hintSlot.appendChild(hintChip);
 
     // ⓘ 圖示仍可手動展開／收回
@@ -2496,9 +2531,10 @@ function renderTable() {
     tdName.appendChild(wrap);
 
     // 盤點數量欄
-    const isMulti = isMultiRow(row);
-    const tdCount = makeCell(row.count_qty, !isMulti);   // 猴頭菇：盤點數量為唯讀的「總斤數」
-    if (isMulti) buildMultiInputs(row, tr, tdName, tdCount);
+    const cartonCfg = getCartonCfg(row);
+    const isMulti = isMultiRow(row) || !!cartonCfg;
+    const tdCount = makeCell(row.count_qty, !isMulti);   // 猴頭菇／手套／麻辣醬：盤點數量為唯讀的彙總文字
+    if (isMulti) buildMultiInputs(row, tr, tdName, tdCount, cartonCfg);
     const isFormulaRow = isFormulaName(row.name);
     tdCount.addEventListener('focus', () => {
       tdCount.dataset.wasBlank = tdCount.textContent.trim() === '' ? '1' : '0';
@@ -2643,7 +2679,7 @@ function renderTable() {
     tdConv.className = 'conv-cell';
     const refreshConv = () => {
       let q = '';
-      if (!isMulti) {
+      if (!isMultiRow(row)) {
         const raw = row.count_qty;
         const hasCount = !(raw === null || raw === undefined || String(raw).trim() === '');
         q = hasCount ? exportQty(row) : '';
@@ -2682,7 +2718,7 @@ function renderTable() {
     // 點選（或以鍵盤切換到）任一品項列，自動顯示該品項的盤點單位提示
     const autoShowHint = (e) => {
       if (e.target.closest('.del-btn')) return;
-      if (getCountHint(row.unit)) openRowHint(tr);   // 沒有單位資訊的列不自動展開
+      if (getCountHint(row.unit) || getCartonCfg(row)) openRowHint(tr);   // 沒有單位資訊的列不自動展開
     };
     tr.addEventListener('click', autoShowHint);
     tr.addEventListener('focusin', autoShowHint);
